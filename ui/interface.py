@@ -2,6 +2,8 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, RichLog, Input
 from core.commands import process_command
+from core.connection import Connection
+from core.mcp_parser import MCPParser
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -12,6 +14,8 @@ class MCPApp(App):
     def __init__(self, config, **kwargs):
         super().__init__(css_path=CSS_PATH, **kwargs)
         self.config = config
+        self.connection = Connection(self)
+        self.parser = MCPParser(self)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -23,7 +27,7 @@ class MCPApp(App):
     def on_mount(self) -> None:
         """Called when the app is mounted."""
         self.title = "MCP-Client"
-        self.sub_title = f"Connecting to {self.config['server']['host']}:{self.config['server']['port']}"
+        self.sub_title = "Disconnected"  # Start in a disconnected state
 
         # Add a welcome message and some ASCII art to the header
         header = self.query_one(Header)
@@ -36,14 +40,19 @@ class MCPApp(App):
 
         chat_log = self.query_one("#chat_window")
         chat_log.write("[bold green]Welcome to the MCP Client![/]")
-        chat_log.write('Type [bold cyan]/quit[/] to exit.')
+        chat_log.write("Type [bold cyan]/help[/] for a list of commands.")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Called when the user presses Enter in the input bar."""
         user_input = event.value
 
         # Process the command
-        process_command(self, user_input)
+        await process_command(self, user_input)
 
         # Clear the input bar
         self.query_one(Input).value = ""
+
+    async def on_quit(self) -> None:
+        """Called when the app is quitting."""
+        if self.connection.connected:
+            await self.connection.disconnect()

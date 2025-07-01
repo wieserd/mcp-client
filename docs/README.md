@@ -15,6 +15,11 @@ This project is in its early stages. Here is what has been implemented so far:
 *   **Dependency Management:** Uses `requirements.txt` with `textual` for the UI and `pyyaml` for configuration.
 *   **Configuration Loading:** The application loads server details and UI settings from `config/settings.yaml`. The loading logic is centralized in `config/loader.py`.
 
+### **Networking**
+*   **Async TCP Connection:** The client now features an asynchronous TCP connection manager in `core/connection.py`.
+*   **Connection Management:** It can connect to a server, listen for incoming messages, and handle disconnections gracefully.
+*   **Send & Receive:** The client can send user-typed messages to the server and display messages received from the server in the main chat window.
+
 ### **Terminal UI (TUI)**
 *   **Modern TUI Framework:** Built using the powerful `textual` library.
 *   **Polished "Vibe":** A dark, retro-futuristic theme is implemented in `assets/themes/default.css`.
@@ -22,12 +27,16 @@ This project is in its early stages. Here is what has been implemented so far:
     *   A cool ASCII art logo in the header.
     *   A scrollable, bordered window for chat/log output (`RichLog`).
     *   An interactive input bar for typing commands and messages.
-*   **Basic Interactivity:** The UI is fully interactive. Text entered in the input bar is processed on `Enter`.
+*   **Real-time Status:** The subtitle bar now dynamically updates to show the current connection status (e.g., "Disconnected", "Connecting...", "Connected").
 
 ### **Command Processing**
-*   **Command Dispatcher:** A basic command processor is in place (`core/commands.py`).
-*   **Local Command Handling:** The system can distinguish between local commands (prefixed with `/`) and messages intended for the server.
-*   **`/quit` Command:** The first local command, `/quit`, has been implemented to gracefully exit the application.
+*   **Scalable Command Registry:** The command processor in `core/commands.py` now uses a dictionary-based registry, making it easy to add new commands.
+*   **Local & Remote Command Handling:** The system distinguishes between local client commands (prefixed with `/`) and messages to be sent to the server.
+*   **Implemented Commands:**
+    *   `/connect`: Connects to the server using settings from `config.yaml`.
+    *   `/disconnect`: Disconnects from the server.
+    *   `/help`: Lists all available commands.
+    *   `/quit`: Gracefully disconnects and exits the application.
 
 ---
 
@@ -36,15 +45,14 @@ This project is in its early stages. Here is what has been implemented so far:
 The following features from the original outline are planned for future development:
 
 *   **Network & Protocol Handling:**
-    *   Implement the TCP socket connection in `core/connection.py`.
-    *   Build the MCP protocol parser in `core/mcp_parser.py`.
-    *   Add robust reconnect and failover logic.
+    *   Build the MCP protocol parser in `core/mcp_parser.py` to handle MCP-specific messages.
+    *   Add robust automatic reconnect and failover logic.
 *   **Expanded Command System:**
-    *   Add more local commands (`/connect`, `/disconnect`, `/help`, `/macro`).
+    *   Add more local commands (`/macro`, `/log`, `/script`).
     *   Implement command aliases.
 *   **Advanced UI Features:**
     *   Display a user list.
-    *   Add a status/info bar.
+    *   Add a more detailed status/info bar.
     *   Implement scrollback search in the chat window.
     *   Add autocompletion for commands and names.
 *   **Quality of Life Features:**
@@ -61,6 +69,6 @@ The following features from the original outline are planned for future developm
 
 ## 🐞 Known Errors & Limitations
 
-*   **No Network Connectivity:** The client does **not** currently connect to any server. All messages typed are simply echoed to the local log for demonstration purposes and are prefixed with `[TO SERVER:]`.
-*   **Limited Command Knowledge:** The command processor only recognizes `/quit`. Any other command will result in an "Unknown command" error.
+*   **Raw Protocol Handling:** The client currently displays the raw, unparsed data from the server. It does not yet understand the MCP protocol for features like in-band commands or structured data.
+*   **No Automatic Reconnect:** If the connection is lost, the user must manually use `/connect` to reconnect.
 *   **Configuration is Static:** The `settings.yaml` file is loaded at startup, but there is no in-app way to modify or reload the configuration yet.
