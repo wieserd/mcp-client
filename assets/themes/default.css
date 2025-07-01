@@ -1,0 +1,36 @@
+/* default.css - Retro-futuristic theme */
+
+Screen {
+    background: #0d0d0d;
+    layout: vertical;
+}
+
+Header {
+    background: #1a1a1a;
+    color: cyan;
+    dock: top;
+    height: 4;
+}
+
+RichLog#chat_window {
+    background: #1a1a1a;
+    border: round #4a4a4a;
+    color: #e0e0e0;
+    height: 1fr;
+    padding: 1;
+}
+
+Input#input_bar {
+    background: #2a2a2a;
+    border: round #4a4a4a;
+    color: #e0e0e0;
+    dock: bottom;
+    height: 3;
+    padding: 0 1;
+}
+
+Footer {
+    background: #1a1a1a;
+    color: #8a8a8a;
+    height: 1;
+}

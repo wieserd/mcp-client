@@ -1,0 +1,21 @@
+# MCP Client Settings
+
+server:
+  host: "localhost"
+  port: 6667
+  reconnect_attempts: 3
+  reconnect_delay: 5 # seconds
+
+ui:
+  theme: "default" # Corresponds to a theme file in assets/themes
+  show_user_list: true
+  show_status_bar: true
+
+macros:
+  # Example macro: /greet -> say Hello everyone!
+  greet: "say Hello everyone!"
+
+logging:
+  enabled: true
+  path: "logs"
+  level: "full" # chat, system, or full
