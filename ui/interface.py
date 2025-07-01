@@ -36,7 +36,7 @@ class MCPApp(App):
 
         chat_log = self.query_one("#chat_window")
         chat_log.write("[bold green]Welcome to the MCP Client![/]")
-        chat_log.write('Type [bold cyan]/quit[/] to exit.')
+        chat_log.write("Type [bold cyan]/help[/] for a list of commands.")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Called when the user presses Enter in the input bar."""
