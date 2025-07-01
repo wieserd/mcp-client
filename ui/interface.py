@@ -2,6 +2,7 @@ from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, RichLog, Input
 from core.commands import process_command
+from core.connection import Connection
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -12,6 +13,7 @@ class MCPApp(App):
     def __init__(self, config, **kwargs):
         super().__init__(css_path=CSS_PATH, **kwargs)
         self.config = config
+        self.connection = Connection(self)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -23,7 +25,7 @@ class MCPApp(App):
     def on_mount(self) -> None:
         """Called when the app is mounted."""
         self.title = "MCP-Client"
-        self.sub_title = f"Connecting to {self.config['server']['host']}:{self.config['server']['port']}"
+        self.sub_title = "Disconnected"  # Start in a disconnected state
 
         # Add a welcome message and some ASCII art to the header
         header = self.query_one(Header)
@@ -43,7 +45,12 @@ class MCPApp(App):
         user_input = event.value
 
         # Process the command
-        process_command(self, user_input)
+        await process_command(self, user_input)
 
         # Clear the input bar
         self.query_one(Input).value = ""
+
+    async def on_quit(self) -> None:
+        """Called when the app is quitting."""
+        if self.connection.connected:
+            await self.connection.disconnect()
