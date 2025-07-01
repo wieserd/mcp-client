@@ -1,0 +1,6 @@
+[bold cyan]
+  __  __  ___   ___  
+ |  \/  |/ __| / __| 
+ | |\/| | (__ | |    
+ |_|  |_|\___| \_|    
+[/] - [white]Retro-Futuristic Edition[/]

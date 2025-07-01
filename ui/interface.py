@@ -29,14 +29,17 @@ class MCPApp(App):
         self.title = "MCP-Client"
         self.sub_title = "Disconnected"  # Start in a disconnected state
 
+        # Load the ASCII art logo from the file
+        logo_path = (Path(__file__).parent / "../assets/logo.txt").resolve()
+        try:
+            with open(logo_path, "r") as f:
+                logo_text = f.read()
+        except FileNotFoundError:
+            logo_text = "MCP-Client"
+
         # Add a welcome message and some ASCII art to the header
         header = self.query_one(Header)
-        header.renderable = r"""[bold cyan]
-  __  __  ___   ___  
- |  \/  |/ __| / __| 
- | |\/| | (__ | |    
- |_|  |_|\___| \_|    
-[/] - [white]Retro-Futuristic Edition[/]"""
+        header.renderable = logo_text
 
         chat_log = self.query_one("#chat_window")
         chat_log.write("[bold green]Welcome to the MCP Client![/]")
