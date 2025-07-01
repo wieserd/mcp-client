@@ -1,6 +1,7 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, RichLog, Input
+from rich.text import Text
 from core.commands import process_command
 from core.connection import Connection
 from core.mcp_parser import MCPParser
@@ -42,8 +43,8 @@ class MCPApp(App):
         header.renderable = logo_text
 
         chat_log = self.query_one("#chat_window")
-        chat_log.write("[bold green]Welcome to the MCP Client![/]")
-        chat_log.write("Type [bold cyan]/help[/] for a list of commands.")
+        chat_log.write(Text.from_markup("[bold green]Welcome to the MCP Client![/]"))
+        chat_log.write(Text.from_markup("Type [bold cyan]/help[/] for a list of commands."))
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Called when the user presses Enter in the input bar."""
