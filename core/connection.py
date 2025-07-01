@@ -1,5 +1,6 @@
 import asyncio
 from textual.app import App
+from core.mcp_parser import MCPParser
 
 class Connection:
     """Manages the asyncio-based TCP connection to the server."""
@@ -9,6 +10,7 @@ class Connection:
         self.reader: asyncio.StreamReader | None = None
         self.writer: asyncio.StreamWriter | None = None
         self.connected = False
+        self.parser = MCPParser(app)
 
     async def connect(self, host: str, port: int) -> None:
         """Establishes a connection to the server and starts listening for messages."""
@@ -38,14 +40,14 @@ class Connection:
         self.app.sub_title = "Disconnected"
 
     async def listen_for_messages(self) -> None:
-        """Listens for incoming messages from the server and displays them."""
+        """Listens for incoming messages from the server and passes them to the parser."""
         chat_log = self.app.query_one("#chat_window")
         while self.reader and not self.reader.at_eof():
             try:
-                data = await self.reader.read(1024)
+                data = await self.reader.read(4096) # Read a larger chunk
                 if data:
-                    # For now, just decode and print the raw message
-                    chat_log.write(f"[blue]FROM SERVER:[/] {data.decode('utf-8', 'ignore').strip()}")
+                    message = data.decode('utf-8', 'ignore')
+                    self.parser.parse(message)
                 else:
                     break # Connection closed by server
             except Exception as e:

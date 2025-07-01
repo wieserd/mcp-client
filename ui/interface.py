@@ -3,6 +3,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, RichLog, Input
 from core.commands import process_command
 from core.connection import Connection
+from core.mcp_parser import MCPParser
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -14,6 +15,7 @@ class MCPApp(App):
         super().__init__(css_path=CSS_PATH, **kwargs)
         self.config = config
         self.connection = Connection(self)
+        self.parser = MCPParser(self)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
