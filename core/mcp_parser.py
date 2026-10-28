@@ -6,30 +6,39 @@ class MCPParser:
     def __init__(self, app: App):
         self.app = app
 
+    @property
+    def renderer(self):
+        return getattr(self.app, "renderer", None)
+
     def parse(self, message: str):
         """Parses an incoming message from the server."""
-        chat_log = self.app.query_one("#chat_window")
-
-        # MCP messages are on their own lines.
-        lines = message.strip().splitlines()
+        lines = message.splitlines()
 
         for line in lines:
             if line.startswith("#$#"):
                 self._handle_mcp_message(line)
             else:
-                # It's just regular text from the MUD.
-                chat_log.write(line)
+                # Regular text from the MUD
+                if self.renderer:
+                    self.renderer.write_server(line)
+                else:
+                    self.app.query_one("#chat_window").write(line)
 
     def _handle_mcp_message(self, mcp_string: str):
         """Handles a single, validated MCP message string."""
-        chat_log = self.app.query_one("#chat_window")
         parts = mcp_string.split()
-        command = parts[0][3:] # Remove the "#$#"
+        if not parts:
+            return
+        command = parts[0][3:]  # Remove the "#$#"
 
-        # For now, we only handle the initial negotiation message.
+        # For now, we handle the initial negotiation message.
         if command == "mcp-negotiation-can" and "package:" in mcp_string and "version:" in mcp_string:
-            chat_log.write("[bold magenta]MCP:[/] Server supports MCP 2.1. Negotiation started.")
-            # In the future, we would parse the packages and versions here.
+            if self.renderer:
+                self.renderer.write_mcp("Server supports MCP 2.1. Negotiation started.")
+            else:
+                self.app.query_one("#chat_window").write("[bold magenta]MCP:[/] Server supports MCP 2.1. Negotiation started.")
         else:
-            # For now, just display any other MCP messages for debugging.
-            chat_log.write(f"[bold magenta]MCP:[/] Received unknown command: {command}")
+            if self.renderer:
+                self.renderer.write_mcp(f"Received unknown command: {command}")
+            else:
+                self.app.query_one("#chat_window").write(f"[bold magenta]MCP:[/] Received unknown command: {command}")
