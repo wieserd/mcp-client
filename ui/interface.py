@@ -6,6 +6,7 @@ from core.commands import process_command
 from core.connection import Connection
 from core.mcp_parser import MCPParser
 from ui.output_renderer import OutputRenderer
+from ui.input_handler import HistoryInput
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -24,7 +25,7 @@ class MCPApp(App):
         """Create child widgets for the app."""
         yield Header()
         yield RichLog(id="chat_window", wrap=True)
-        yield Input(placeholder="Enter command or message...", id="input_bar")
+        yield HistoryInput(placeholder="Enter command or message...", id="input_bar")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -50,11 +51,14 @@ class MCPApp(App):
         """Called when the user presses Enter in the input bar."""
         user_input = event.value
 
+        if hasattr(event.input, "add_history"):
+            event.input.add_history(user_input)
+
         # Process the command
         await process_command(self, user_input)
 
         # Clear the input bar
-        self.query_one(Input).value = ""
+        event.input.value = ""
 
     async def on_quit(self) -> None:
         """Called when the app is quitting."""
