@@ -46,6 +46,7 @@ class MCPApp(App):
 
         self.renderer.write_success("Welcome to the MCP Client!")
         self.renderer.write("Type [bold cyan]/help[/] for a list of commands.")
+        self.query_one("#input_bar").focus()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Called when the user presses Enter in the input bar."""
