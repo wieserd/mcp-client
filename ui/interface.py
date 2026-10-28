@@ -5,6 +5,7 @@ from rich.text import Text
 from core.commands import process_command
 from core.connection import Connection
 from core.mcp_parser import MCPParser
+from ui.output_renderer import OutputRenderer
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -15,8 +16,9 @@ class MCPApp(App):
     def __init__(self, config, **kwargs):
         super().__init__(css_path=CSS_PATH, **kwargs)
         self.config = config
-        self.connection = Connection(self)
+        self.renderer = OutputRenderer(self)
         self.parser = MCPParser(self)
+        self.connection = Connection(self)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -36,15 +38,13 @@ class MCPApp(App):
             with open(logo_path, "r") as f:
                 logo_text = f.read()
         except FileNotFoundError:
-            logo_text = "MCP-Client"
+            logo_text = ""
 
-        # Add a welcome message and some ASCII art to the header
-        header = self.query_one(Header)
-        header.renderable = logo_text
+        if logo_text.strip():
+            self.renderer.write(f"[bold cyan]{logo_text}[/]")
 
-        chat_log = self.query_one("#chat_window")
-        chat_log.write(Text.from_markup("[bold green]Welcome to the MCP Client![/]"))
-        chat_log.write(Text.from_markup("Type [bold cyan]/help[/] for a list of commands."))
+        self.renderer.write_success("Welcome to the MCP Client!")
+        self.renderer.write("Type [bold cyan]/help[/] for a list of commands.")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Called when the user presses Enter in the input bar."""
