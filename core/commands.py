@@ -15,13 +15,26 @@ async def command_help(app: App, args: list[str]):
         chat_log.write(f"  [bold green]/{command}[/]: {help_text.strip()}")
 
 async def command_connect(app: App, args: list[str]):
-    """Connects to the server specified in the config."""
-    if not app.connection.connected:
-        host = app.config['server']['host']
-        port = app.config['server']['port']
-        await app.connection.connect(host, port)
-    else:
-        app.query_one("#chat_window").write("[yellow]Already connected.[/]")
+    """Connects to the server specified in the config or via /connect [host] [port]."""
+    chat_log = app.query_one("#chat_window")
+    if app.connection.connected:
+        chat_log.write("[yellow]Already connected.[/]")
+        return
+
+    server_config = (app.config or {}).get("server", {})
+    host = server_config.get("host", "localhost")
+    port = server_config.get("port", 6667)
+
+    if len(args) >= 1:
+        host = args[0]
+    if len(args) >= 2:
+        try:
+            port = int(args[1])
+        except ValueError:
+            chat_log.write(f"[bold red]Invalid port: [white]{args[1]}[/]. Port must be a number.[/]")
+            return
+
+    await app.connection.connect(host, port)
 
 async def command_disconnect(app: App, args: list[str]):
     """Disconnects from the server."""
@@ -44,18 +57,26 @@ COMMAND_REGISTRY = {
 async def process_command(app: App, user_input: str):
     """Processes user input, distinguishing between local commands and server messages."""
     chat_log = app.query_one("#chat_window")
+    stripped = user_input.strip()
 
-    if not user_input.startswith("/"):
+    if not stripped:
+        return
+
+    if not stripped.startswith("/"):
         if app.connection.writer and app.connection.connected:
             # Add a newline because servers expect it
-            app.connection.writer.write(user_input.encode() + b'\n')
+            app.connection.writer.write(stripped.encode() + b'\n')
             await app.connection.writer.drain()
-            chat_log.write(f"[orange]TO SERVER:[/] {user_input}")
+            chat_log.write(f"[orange]TO SERVER:[/] {stripped}")
         else:
             chat_log.write("[bold red]Not connected. Use /connect to establish a connection.[/]")
         return
 
-    parts = user_input[1:].split()
+    parts = stripped[1:].split()
+    if not parts:
+        chat_log.write("[yellow]No command specified. Type [bold cyan]/help[/] for available commands.[/]")
+        return
+
     command_name = parts[0].lower()
     args = parts[1:]
 
