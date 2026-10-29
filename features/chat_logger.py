@@ -3,11 +3,7 @@
 from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
-import re
-
-
-# Helper regex to strip Rich markup tags e.g. [bold red], [/], [cyan]
-STRIP_MARKUP_REGEX = re.compile(r"\[/?(?:bold|dim|italic|underline|blink|reverse|strike|white|black|red|green|yellow|blue|magenta|cyan|orange|orange3|#[\da-fA-F]{6})*\]")
+from rich.text import Text
 
 
 class ChatLogger:
@@ -46,7 +42,11 @@ class ChatLogger:
         if self.level == "system" and cat != "system":
             return
 
-        clean_text = STRIP_MARKUP_REGEX.sub("", str(text)).strip()
+        try:
+            clean_text = Text.from_markup(str(text)).plain.strip()
+        except Exception:
+            clean_text = str(text).strip()
+
         if not clean_text:
             return
 
