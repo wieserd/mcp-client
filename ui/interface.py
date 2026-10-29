@@ -1,5 +1,7 @@
 from pathlib import Path
 from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.widgets import Header, Footer, RichLog, Input
 from rich.text import Text
 from core.commands import process_command
@@ -7,6 +9,7 @@ from core.connection import Connection
 from core.mcp_parser import MCPParser
 from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
+from ui.user_list import UserListSidebar
 from features.chat_logger import ChatLogger
 from features.macros import MacroManager
 from features.notifications import NotificationManager
@@ -17,6 +20,10 @@ CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
 
 class MCPApp(App):
     """A Textual-based MCP client."""
+
+    BINDINGS = [
+        Binding("ctrl+u", "toggle_users", "Toggle User List", show=True),
+    ]
 
     def __init__(self, config, **kwargs):
         super().__init__(css_path=CSS_PATH, **kwargs)
