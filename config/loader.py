@@ -51,12 +51,27 @@ class LoggingConfig:
 
 
 @dataclass
+class MCPServerDefinition:
+    """Configuration definition for an AI Model Context Protocol server."""
+    command: str = "python3"
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+
+@dataclass
 class AppConfig:
     """Root configuration model for the application."""
     server: ServerConfig = field(default_factory=ServerConfig)
     ui: UIConfig = field(default_factory=UIConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     macros: dict[str, str] = field(default_factory=dict)
+    mcp_servers: dict[str, MCPServerDefinition] = field(default_factory=dict)
 
     def get(self, key: str, default: Any = None) -> Any:
         return getattr(self, key, default)
