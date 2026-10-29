@@ -10,6 +10,7 @@ from core.mcp_parser import MCPParser
 from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
 from ui.user_list import UserListSidebar
+from ui.status_bar import StatusBar
 from features.chat_logger import ChatLogger
 from features.macros import MacroManager
 from features.notifications import NotificationManager
@@ -22,7 +23,9 @@ class MCPApp(App):
     """A Textual-based MCP client."""
 
     BINDINGS = [
-        Binding("ctrl+u", "toggle_users", "Toggle User List", show=True),
+        Binding("f2", "toggle_users", "Toggle User List", show=True),
+        Binding("ctrl+b", "toggle_users", "Toggle User List", show=False),
+        Binding("f3", "toggle_status_bar", "Toggle Status Bar", show=True),
     ]
 
     def __init__(self, config, **kwargs):
@@ -49,6 +52,7 @@ class MCPApp(App):
         with Horizontal(id="content_area"):
             yield RichLog(id="chat_window", wrap=True)
             yield UserListSidebar(id="user_sidebar")
+        yield StatusBar(id="status_bar")
         yield HistoryInput(placeholder="Enter command or message...", id="input_bar")
         yield Footer()
 
@@ -57,7 +61,7 @@ class MCPApp(App):
         self.title = "MCP-Client"
         self.sub_title = "Disconnected"  # Start in a disconnected state
 
-        # Check configured initial visibility for the user sidebar
+        # Check configured initial visibility for the user sidebar and status bar
         ui_cfg = getattr(self.config, "ui", None) or (self.config.get("ui", {}) if isinstance(self.config, dict) else {})
         show_users = getattr(ui_cfg, "show_user_list", True) if hasattr(ui_cfg, "show_user_list") else ui_cfg.get("show_user_list", True)
         if not show_users:
@@ -65,6 +69,15 @@ class MCPApp(App):
                 self.query_one(UserListSidebar).add_class("hidden")
             except Exception:
                 pass
+
+        show_status_bar = getattr(ui_cfg, "show_status_bar", True) if hasattr(ui_cfg, "show_status_bar") else ui_cfg.get("show_status_bar", True)
+        if not show_status_bar:
+            try:
+                self.query_one(StatusBar).add_class("hidden")
+            except Exception:
+                pass
+
+        self.set_interval(1.0, self._tick_status_bar)
 
         # Load the ASCII art logo from the file
         logo_path = (Path(__file__).parent / "../assets/logo.txt").resolve()
@@ -89,6 +102,24 @@ class MCPApp(App):
             if hasattr(self, "renderer"):
                 state = "shown" if visible else "hidden"
                 self.renderer.write_info(f"User list {state}.")
+        except Exception:
+            pass
+
+    def _tick_status_bar(self) -> None:
+        """Periodic tick to update the status bar clock and telemetry."""
+        try:
+            self.query_one(StatusBar).refresh_status()
+        except Exception:
+            pass
+
+    def action_toggle_status_bar(self) -> None:
+        """Toggles the visibility of the bottom status bar."""
+        try:
+            bar = self.query_one(StatusBar)
+            visible = bar.toggle()
+            if hasattr(self, "renderer"):
+                state = "shown" if visible else "hidden"
+                self.renderer.write_info(f"Status bar {state}.")
         except Exception:
             pass
 
