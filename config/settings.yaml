@@ -1,5 +1,20 @@
 # MCP Client Settings
 
+# MCP Servers (Anthropic Model Context Protocol standard)
+mcpServers:
+  sample:
+    command: "python3"
+    args: ["-u", "assets/sample_server.py"]
+
+# LLM AI Assistant & Autonomous MCP Tool-Calling
+llm:
+  enabled: true
+  provider: "mock" # Set to 'ollama' for local Ollama, 'openai' for OpenAI, or 'mock' for built-in demo
+  base_url: "http://localhost:11434"
+  model: "llama3.2"
+  api_key: ""
+  temperature: 0.7
+
 server:
   host: "localhost"
   port: 6667
@@ -19,3 +34,4 @@ logging:
   enabled: true
   path: "logs"
   level: "full" # chat, system, or full
+
