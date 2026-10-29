@@ -11,6 +11,7 @@ from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
 from ui.user_list import UserListSidebar
 from ui.status_bar import StatusBar
+from ui.search_box import SearchBox
 from features.chat_logger import ChatLogger
 from features.macros import MacroManager
 from features.notifications import NotificationManager
@@ -26,6 +27,8 @@ class MCPApp(App):
         Binding("f2", "toggle_users", "Toggle User List", show=True),
         Binding("ctrl+b", "toggle_users", "Toggle User List", show=False),
         Binding("f3", "toggle_status_bar", "Toggle Status Bar", show=True),
+        Binding("ctrl+f", "toggle_search", "Search Scrollback", show=True),
+        Binding("f4", "toggle_search", "Search Scrollback", show=False),
     ]
 
     def __init__(self, config, **kwargs):
@@ -52,6 +55,7 @@ class MCPApp(App):
         with Horizontal(id="content_area"):
             yield RichLog(id="chat_window", wrap=True)
             yield UserListSidebar(id="user_sidebar")
+        yield SearchBox(id="search_box")
         yield StatusBar(id="status_bar")
         yield HistoryInput(placeholder="Enter command or message...", id="input_bar")
         yield Footer()
@@ -120,6 +124,13 @@ class MCPApp(App):
             if hasattr(self, "renderer"):
                 state = "shown" if visible else "hidden"
                 self.renderer.write_info(f"Status bar {state}.")
+        except Exception:
+            pass
+
+    def action_toggle_search(self) -> None:
+        """Toggles the interactive search box."""
+        try:
+            self.query_one(SearchBox).toggle()
         except Exception:
             pass
 
