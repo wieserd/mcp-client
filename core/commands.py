@@ -385,6 +385,77 @@ async def command_ticker(app: App, args: list[str]):
     else:
         write_out(f"Unknown /ticker command: '{subcmd}'. Usage: /ticker [list|add <seconds> <command>|del <id>]", "error")
 
+async def command_users(app: App, args: list[str]):
+    """Manages the online user and room occupant sidebar (Usage: /users [list|toggle|add <name>|del <name>|clear])."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    sidebar = None
+    try:
+        from ui.user_list import UserListSidebar
+        sidebar = app.query_one(UserListSidebar)
+    except Exception:
+        pass
+
+    subcmd = args[0].lower() if args else "list"
+
+    if subcmd in ("toggle", "hide", "show"):
+        if sidebar:
+            visible = sidebar.toggle()
+            state = "shown" if visible else "hidden"
+            write_out(f"User sidebar is now [bold cyan]{state}[/].", "success")
+        else:
+            write_out("User sidebar is not available.", "warning")
+
+    elif subcmd in ("list", "who"):
+        users = sidebar.get_users() if sidebar else []
+        if not users:
+            write_out("No users currently registered in room/user list.", "warning")
+        else:
+            write_out(f"Users online ({len(users)}): [bold cyan]{', '.join(users)}[/]")
+
+    elif subcmd in ("add", "join"):
+        if len(args) < 2:
+            write_out("Usage: /users add <name>", "error")
+            return
+        name = " ".join(args[1:])
+        if sidebar and sidebar.add_user(name):
+            write_out(f"Added [bold cyan]{name}[/] to user list.", "success")
+        else:
+            write_out(f"User [bold cyan]{name}[/] is already in list or sidebar unavailable.", "warning")
+
+    elif subcmd in ("del", "remove", "leave"):
+        if len(args) < 2:
+            write_out("Usage: /users del <name>", "error")
+            return
+        name = " ".join(args[1:])
+        if sidebar and sidebar.remove_user(name):
+            write_out(f"Removed [bold cyan]{name}[/] from user list.", "success")
+        else:
+            write_out(f"User [bold cyan]{name}[/] not found in list.", "warning")
+
+    elif subcmd == "clear":
+        if sidebar:
+            sidebar.clear_users()
+            write_out("Cleared all users from list.", "success")
+        else:
+            write_out("User sidebar is not available.", "warning")
+
+    else:
+        write_out(f"Unknown /users option: '{subcmd}'. Usage: /users [list|toggle|add <name>|del <name>|clear]", "error")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -398,6 +469,7 @@ COMMAND_REGISTRY = {
     "notify": command_notify,
     "trigger": command_trigger,
     "ticker": command_ticker,
+    "users": command_users,
 }
 
 # --- Main Processor ---
