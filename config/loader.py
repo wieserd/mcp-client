@@ -142,9 +142,20 @@ def load_config(config_path: Path | str | None = None) -> AppConfig:
 
     macros = {str(k): str(v) for k, v in macros_raw.items()} if isinstance(macros_raw, dict) else {}
 
+    mcp_raw = raw_data.get("mcpServers") or raw_data.get("mcp_servers") or {}
+    mcp_servers = {}
+    if isinstance(mcp_raw, dict):
+        for s_name, s_cfg in mcp_raw.items():
+            if isinstance(s_cfg, dict):
+                cmd = str(s_cfg.get("command", "python3"))
+                args = [str(a) for a in s_cfg.get("args", [])] if isinstance(s_cfg.get("args"), list) else []
+                env = {str(k): str(v) for k, v in s_cfg.get("env", {}).items()} if isinstance(s_cfg.get("env"), dict) else {}
+                mcp_servers[str(s_name)] = MCPServerDefinition(command=cmd, args=args, env=env)
+
     return AppConfig(
         server=server,
         ui=ui,
         logging=logging_cfg,
         macros=macros,
+        mcp_servers=mcp_servers,
     )
