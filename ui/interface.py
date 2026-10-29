@@ -107,8 +107,28 @@ class MCPApp(App):
             self.renderer.write(f"[bold cyan]{logo_text}[/]")
 
         self.renderer.write_success("Welcome to the MCP Client!")
-        self.renderer.write("Type [bold cyan]/help[/] for a list of commands.")
+        self.renderer.write("Type [bold cyan]/help[/] for a list of commands, or [bold cyan]/tools[/] for available MCP tools.")
         self.query_one("#input_bar").focus()
+
+        # Auto-connect configured MCP servers
+        if hasattr(self, "server_manager") and self.server_manager.servers:
+            for s_name in self.server_manager.servers:
+                asyncio.create_task(self._auto_start_mcp_server(s_name))
+
+    async def _auto_start_mcp_server(self, name: str) -> None:
+        """Asynchronously starts a configured MCP server in the background on startup."""
+        try:
+            ok = await self.server_manager.start_server(name)
+            if ok:
+                session = self.server_manager.get_server(name)
+                tools_cnt = len(session.tools) if session else 0
+                self.renderer.write_success(f"MCP server '[bold cyan]{name}[/]' connected ({tools_cnt} tools available).")
+            else:
+                session = self.server_manager.get_server(name)
+                err = session.last_error if session else "Unknown error"
+                self.renderer.write_warning(f"Could not connect MCP server '{name}': {err}")
+        except Exception as e:
+            self.renderer.write_error(f"Error starting MCP server '{name}': {e}")
 
     def action_toggle_users(self) -> None:
         """Toggles the visibility of the user sidebar."""
