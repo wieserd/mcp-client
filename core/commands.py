@@ -158,6 +158,73 @@ async def command_macro(app: App, args: list[str]):
     else:
         write_out(f"Unknown /macro action: '{subcmd}'. Usage: /macro [list|set <name> <template>|del <name>]", "error")
 
+async def command_notify(app: App, args: list[str]):
+    """Manages notifications and keyword alerts (Usage: /notify [on|off|sound|watch <word>|unwatch <word>|list|test])."""
+    renderer = getattr(app, "renderer", None)
+    mgr = getattr(app, "notifications", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not mgr:
+        write_out("Notification manager is not available.", "error")
+        return
+
+    subcmd = args[0].lower() if args else "status"
+
+    if subcmd == "on":
+        mgr.enabled = True
+        write_out("Notifications enabled.", "success")
+    elif subcmd == "off":
+        mgr.enabled = False
+        write_out("Notifications disabled.", "warning")
+    elif subcmd == "sound":
+        mode = args[1].lower() if len(args) > 1 else ("off" if mgr.sound else "on")
+        mgr.sound = (mode == "on")
+        write_out(f"Notification sound set to: {'ON' if mgr.sound else 'OFF'}", "success")
+    elif subcmd in ("watch", "add"):
+        if len(args) < 2:
+            write_out("Usage: /notify watch <keyword>", "error")
+            return
+        kw = args[1]
+        if mgr.add_keyword(kw):
+            write_out(f"Now watching keyword: [bold cyan]{kw}[/]", "success")
+        else:
+            write_out(f"Keyword [bold cyan]{kw}[/] is already being watched.", "warning")
+    elif subcmd in ("unwatch", "del", "remove"):
+        if len(args) < 2:
+            write_out("Usage: /notify unwatch <keyword>", "error")
+            return
+        kw = args[1]
+        if mgr.remove_keyword(kw):
+            write_out(f"Removed watched keyword: [bold cyan]{kw}[/]", "success")
+        else:
+            write_out(f"Keyword [bold cyan]{kw}[/] was not watched.", "warning")
+    elif subcmd == "list":
+        kws = mgr.list_keywords()
+        if not kws:
+            write_out("No keywords currently watched.", "warning")
+        else:
+            write_out(f"Watched keywords: [bold cyan]{', '.join(kws)}[/]")
+    elif subcmd == "test":
+        test_msg = " ".join(args[1:]) if len(args) > 1 else "This is a test notification."
+        mgr.notify(test_msg, title="Test Notification")
+        write_out("Sent test notification.", "info")
+    elif subcmd in ("status", "info"):
+        write_out(f"Notifications: {mgr.get_status()}")
+    else:
+        write_out(f"Unknown option '{subcmd}'. Usage: /notify [on|off|sound|watch <word>|unwatch <word>|list|test]", "error")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -167,6 +234,7 @@ COMMAND_REGISTRY = {
     "disconnect": command_disconnect,
     "log": command_log,
     "macro": command_macro,
+    "notify": command_notify,
 }
 
 # --- Main Processor ---
