@@ -1,5 +1,11 @@
 # MCP Client Settings
 
+# MCP Servers (Anthropic Model Context Protocol standard)
+mcpServers:
+  sample:
+    command: "python3"
+    args: ["-u", "assets/sample_server.py"]
+
 server:
   host: "localhost"
   port: 6667
@@ -19,3 +25,4 @@ logging:
   enabled: true
   path: "logs"
   level: "full" # chat, system, or full
+
