@@ -22,38 +22,45 @@ class OutputRenderer:
         except Exception:
             return None
 
-    def write(self, content: str | Text) -> None:
-        """Writes arbitrary string markup or Text to the chat window."""
+    def _log(self, content: str | Text, category: str = "system") -> None:
+        logger = getattr(self.app, "logger", None)
+        if logger:
+            raw = content.plain if isinstance(content, Text) else str(content)
+            logger.log(raw, category=category)
+
+    def write(self, content: str | Text, category: str = "system") -> None:
+        """Writes arbitrary string markup or Text to the chat window and logs it."""
         log = self._get_chat_log()
         if log is not None:
             if isinstance(content, str):
                 log.write(Text.from_markup(content))
             else:
                 log.write(content)
+        self._log(content, category=category)
 
     def write_info(self, message: str) -> None:
         """Writes an informational message."""
-        self.write(f"[cyan]{message}[/]")
+        self.write(f"[cyan]{message}[/]", category="system")
 
     def write_success(self, message: str) -> None:
         """Writes a success message."""
-        self.write(f"[bold green]{message}[/]")
+        self.write(f"[bold green]{message}[/]", category="system")
 
     def write_warning(self, message: str) -> None:
         """Writes a warning message."""
-        self.write(f"[yellow]{message}[/]")
+        self.write(f"[yellow]{message}[/]", category="system")
 
     def write_error(self, message: str) -> None:
         """Writes an error message."""
-        self.write(f"[bold red]{message}[/]")
+        self.write(f"[bold red]{message}[/]", category="system")
 
     def write_sent(self, message: str) -> None:
         """Writes an outgoing message sent to the server."""
-        self.write(f"[orange3]TO SERVER:[/] {message}")
+        self.write(f"[orange3]TO SERVER:[/] {message}", category="chat")
 
     def write_mcp(self, text: str) -> None:
         """Writes an MCP protocol notification."""
-        self.write(f"[bold magenta]MCP:[/] {text}")
+        self.write(f"[bold magenta]MCP:[/] {text}", category="system")
 
     def write_server(self, text: str) -> None:
         """Writes incoming text from the server."""
@@ -61,3 +68,4 @@ class OutputRenderer:
         if log is not None:
             # Server text might have rich markup characters like '['; treat raw server text cleanly
             log.write(Text(text))
+        self._log(text, category="chat")
