@@ -8,6 +8,7 @@ from core.mcp_parser import MCPParser
 from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
 from features.chat_logger import ChatLogger
+from features.macros import MacroManager
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -23,6 +24,10 @@ class MCPApp(App):
         log_dir = getattr(logging_cfg, "path", "logs") if hasattr(logging_cfg, "path") else logging_cfg.get("path", "logs")
         level = getattr(logging_cfg, "level", "full") if hasattr(logging_cfg, "level") else logging_cfg.get("level", "full")
         self.logger = ChatLogger(enabled=enabled, log_dir=log_dir, level=level)
+
+        initial_macros = getattr(config, "macros", None) or (config.get("macros", {}) if isinstance(config, dict) else {})
+        self.macros = MacroManager(initial_macros if isinstance(initial_macros, dict) else {})
+
         self.renderer = OutputRenderer(self)
         self.parser = MCPParser(self)
         self.connection = Connection(self)
