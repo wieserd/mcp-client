@@ -46,7 +46,9 @@ class MCPApp(App):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
-        yield RichLog(id="chat_window", wrap=True)
+        with Horizontal(id="content_area"):
+            yield RichLog(id="chat_window", wrap=True)
+            yield UserListSidebar(id="user_sidebar")
         yield HistoryInput(placeholder="Enter command or message...", id="input_bar")
         yield Footer()
 
@@ -54,6 +56,15 @@ class MCPApp(App):
         """Called when the app is mounted."""
         self.title = "MCP-Client"
         self.sub_title = "Disconnected"  # Start in a disconnected state
+
+        # Check configured initial visibility for the user sidebar
+        ui_cfg = getattr(self.config, "ui", None) or (self.config.get("ui", {}) if isinstance(self.config, dict) else {})
+        show_users = getattr(ui_cfg, "show_user_list", True) if hasattr(ui_cfg, "show_user_list") else ui_cfg.get("show_user_list", True)
+        if not show_users:
+            try:
+                self.query_one(UserListSidebar).add_class("hidden")
+            except Exception:
+                pass
 
         # Load the ASCII art logo from the file
         logo_path = (Path(__file__).parent / "../assets/logo.txt").resolve()
@@ -69,6 +80,17 @@ class MCPApp(App):
         self.renderer.write_success("Welcome to the MCP Client!")
         self.renderer.write("Type [bold cyan]/help[/] for a list of commands.")
         self.query_one("#input_bar").focus()
+
+    def action_toggle_users(self) -> None:
+        """Toggles the visibility of the user sidebar."""
+        try:
+            sidebar = self.query_one(UserListSidebar)
+            visible = sidebar.toggle()
+            if hasattr(self, "renderer"):
+                state = "shown" if visible else "hidden"
+                self.renderer.write_info(f"User list {state}.")
+        except Exception:
+            pass
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Called when the user presses Enter in the input bar."""
