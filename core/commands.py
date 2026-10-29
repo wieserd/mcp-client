@@ -61,6 +61,48 @@ async def command_disconnect(app: App, args: list[str]):
         else:
             app.query_one("#chat_window").write("[yellow]Not currently connected.[/]")
 
+async def command_log(app: App, args: list[str]):
+    """Controls session logging (Usage: /log [on|off|status])."""
+    renderer = getattr(app, "renderer", None)
+    logger = getattr(app, "logger", None)
+
+    if not logger:
+        msg = "Logger is not initialized."
+        if renderer:
+            renderer.write_error(msg)
+        else:
+            app.query_one("#chat_window").write(f"[bold red]{msg}[/]")
+        return
+
+    subcmd = args[0].lower() if args else "status"
+
+    if subcmd == "on":
+        logger.enable()
+        msg = f"Chat logging enabled ({logger.get_status()})."
+        if renderer:
+            renderer.write_success(msg)
+        else:
+            app.query_one("#chat_window").write(f"[bold green]{msg}[/]")
+    elif subcmd == "off":
+        logger.disable()
+        msg = "Chat logging disabled."
+        if renderer:
+            renderer.write_warning(msg)
+        else:
+            app.query_one("#chat_window").write(f"[yellow]{msg}[/]")
+    elif subcmd in ("status", "info"):
+        msg = f"Logging {logger.get_status()}"
+        if renderer:
+            renderer.write_info(msg)
+        else:
+            app.query_one("#chat_window").write(f"[cyan]{msg}[/]")
+    else:
+        msg = f"Unknown /log option: '{subcmd}'. Usage: /log [on|off|status]"
+        if renderer:
+            renderer.write_error(msg)
+        else:
+            app.query_one("#chat_window").write(f"[bold red]{msg}[/]")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -68,6 +110,7 @@ COMMAND_REGISTRY = {
     "help": command_help,
     "connect": command_connect,
     "disconnect": command_disconnect,
+    "log": command_log,
 }
 
 # --- Main Processor ---
