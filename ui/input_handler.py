@@ -16,6 +16,7 @@ SUBCOMMANDS: dict[str, list[str]] = {
     "servers": ["list", "start", "stop", "add", "toggle"],
     "sidebar": ["toggle", "refresh"],
     "explorer": ["toggle", "refresh"],
+    "llm": ["status", "toggle", "provider", "model", "clear"],
 }
 
 
@@ -114,6 +115,8 @@ class HistoryInput(Input):
     def _get_available_commands(self) -> list[str]:
         """Returns all built-in commands plus registered user macros."""
         commands = [
+            "ai",
+            "ask",
             "call",
             "clear",
             "connect",
@@ -121,6 +124,7 @@ class HistoryInput(Input):
             "explorer",
             "find",
             "help",
+            "llm",
             "log",
             "macro",
             "notify",
