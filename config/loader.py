@@ -170,10 +170,21 @@ def load_config(config_path: Path | str | None = None) -> AppConfig:
                 env = {str(k): str(v) for k, v in s_cfg.get("env", {}).items()} if isinstance(s_cfg.get("env"), dict) else {}
                 mcp_servers[str(s_name)] = MCPServerDefinition(command=cmd, args=args, env=env)
 
+    llm_raw = raw_data.get("llm") or {}
+    llm = LLMConfig(
+        enabled=bool(llm_raw.get("enabled", True)),
+        provider=str(llm_raw.get("provider", "mock")),
+        base_url=str(llm_raw.get("base_url", "http://localhost:11434")),
+        model=str(llm_raw.get("model", "llama3.2")),
+        api_key=str(llm_raw.get("api_key", "")),
+        temperature=float(llm_raw.get("temperature", 0.7)),
+    )
+
     return AppConfig(
         server=server,
         ui=ui,
         logging=logging_cfg,
         macros=macros,
         mcp_servers=mcp_servers,
+        llm=llm,
     )
