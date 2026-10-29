@@ -103,6 +103,61 @@ async def command_log(app: App, args: list[str]):
         else:
             app.query_one("#chat_window").write(f"[bold red]{msg}[/]")
 
+async def command_macro(app: App, args: list[str]):
+    """Manages custom macros (Usage: /macro [list|set <name> <template>|del <name>])."""
+    renderer = getattr(app, "renderer", None)
+    macros = getattr(app, "macros", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not macros:
+        write_out("Macro manager not available.", "error")
+        return
+
+    subcmd = args[0].lower() if args else "list"
+
+    if subcmd in ("list", "show"):
+        all_macros = macros.list_macros()
+        if not all_macros:
+            write_out("No macros currently defined.", "warning")
+            return
+        write_out("[bold cyan]Defined Macros:[/]")
+        for name, template in sorted(all_macros.items()):
+            write_out(f"  [bold green]/{name}[/] -> [white]{template}[/]")
+
+    elif subcmd in ("set", "add"):
+        if len(args) < 3:
+            write_out("Usage: /macro set <name> <expansion template>", "error")
+            return
+        name = args[1]
+        template = " ".join(args[2:])
+        macros.set_macro(name, template)
+        write_out(f"Macro [bold green]/{name}[/] set to: [white]{template}[/]", "success")
+
+    elif subcmd in ("del", "delete", "remove"):
+        if len(args) < 2:
+            write_out("Usage: /macro del <name>", "error")
+            return
+        name = args[1]
+        if macros.remove_macro(name):
+            write_out(f"Macro [bold green]/{name}[/] removed.", "success")
+        else:
+            write_out(f"Macro [white]/{name}[/] not found.", "warning")
+
+    else:
+        write_out(f"Unknown /macro action: '{subcmd}'. Usage: /macro [list|set <name> <template>|del <name>]", "error")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -111,13 +166,19 @@ COMMAND_REGISTRY = {
     "connect": command_connect,
     "disconnect": command_disconnect,
     "log": command_log,
+    "macro": command_macro,
 }
 
 # --- Main Processor ---
 
-async def process_command(app: App, user_input: str):
-    """Processes user input, distinguishing between local commands and server messages."""
+async def process_command(app: App, user_input: str, depth: int = 0):
+    """Processes user input, distinguishing between local commands, macros, and server messages."""
     renderer = getattr(app, "renderer", None)
+
+    if depth > 10:
+        if renderer:
+            renderer.write_error("Macro recursion limit exceeded.")
+        return
     stripped = user_input.strip()
 
     if not stripped:
@@ -155,6 +216,14 @@ async def process_command(app: App, user_input: str):
     if command_func:
         await command_func(app, args)
     else:
+        # Check if command matches a configured macro
+        macro_mgr = getattr(app, "macros", None)
+        if macro_mgr and macro_mgr.get_macro(command_name):
+            expanded_commands = macro_mgr.expand(command_name, args)
+            for cmd in expanded_commands:
+                await process_command(app, cmd, depth=depth + 1)
+            return
+
         msg = f"Unknown command: [white]/{command_name}[/]. Type /help for a list of commands."
         if renderer:
             renderer.write_error(msg)
