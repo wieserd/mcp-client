@@ -69,3 +69,6 @@ class OutputRenderer:
             # Server text might have rich markup characters like '['; treat raw server text cleanly
             log.write(Text(text))
         self._log(text, category="chat")
+        notifications = getattr(self.app, "notifications", None)
+        if notifications:
+            notifications.check_incoming(text)
