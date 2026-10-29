@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import asyncio
+from pathlib import Path
 from typing import Any
 from core.mcp_client import MCPClientSession
 
@@ -18,9 +19,12 @@ class MCPServerManager:
         command: str,
         args: list[str] | None = None,
         env: dict[str, str] | None = None,
+        cwd: str | None = None,
     ) -> MCPClientSession:
         """Registers a server definition without immediately starting it."""
-        session = MCPClientSession(name=name, command=command, args=args, env=env)
+        if cwd is None:
+            cwd = str(Path(__file__).resolve().parent.parent)
+        session = MCPClientSession(name=name, command=command, args=args, env=env, cwd=cwd)
         self.servers[name] = session
         return session
 
