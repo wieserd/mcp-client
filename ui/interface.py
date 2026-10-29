@@ -10,6 +10,7 @@ from ui.input_handler import HistoryInput
 from features.chat_logger import ChatLogger
 from features.macros import MacroManager
 from features.notifications import NotificationManager
+from features.scripting import ScriptManager
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -30,6 +31,7 @@ class MCPApp(App):
         self.macros = MacroManager(initial_macros if isinstance(initial_macros, dict) else {})
 
         self.notifications = NotificationManager(app=self)
+        self.scripts = ScriptManager(app=self)
         self.renderer = OutputRenderer(self)
         self.parser = MCPParser(self)
         self.connection = Connection(self)
@@ -76,5 +78,7 @@ class MCPApp(App):
 
     async def on_quit(self) -> None:
         """Called when the app is quitting."""
+        if hasattr(self, "scripts"):
+            self.scripts.stop_all()
         if self.connection.connected:
             await self.connection.disconnect()
