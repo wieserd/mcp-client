@@ -12,11 +12,17 @@ Header {
     height: 4;
 }
 
+#content_area {
+    height: 1fr;
+    width: 100%;
+}
+
 RichLog#chat_window {
     background: #1a1a1a;
     border: round #4a4a4a;
     color: #e0e0e0;
     height: 1fr;
+    width: 1fr;
     padding: 1;
 }
 
