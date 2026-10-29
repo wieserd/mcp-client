@@ -65,6 +65,23 @@ class MCPServerDefinition:
 
 
 @dataclass
+class LLMConfig:
+    """Configuration definition for AI language model integration and tool calling."""
+    enabled: bool = True
+    provider: str = "mock"  # ollama, openai, mock
+    base_url: str = "http://localhost:11434"
+    model: str = "llama3.2"
+    api_key: str = ""
+    temperature: float = 0.7
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+
+@dataclass
 class AppConfig:
     """Root configuration model for the application."""
     server: ServerConfig = field(default_factory=ServerConfig)
@@ -72,6 +89,7 @@ class AppConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     macros: dict[str, str] = field(default_factory=dict)
     mcp_servers: dict[str, MCPServerDefinition] = field(default_factory=dict)
+    llm: LLMConfig = field(default_factory=LLMConfig)
 
     def get(self, key: str, default: Any = None) -> Any:
         return getattr(self, key, default)
