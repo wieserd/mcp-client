@@ -225,6 +225,142 @@ async def command_notify(app: App, args: list[str]):
     else:
         write_out(f"Unknown option '{subcmd}'. Usage: /notify [on|off|sound|watch <word>|unwatch <word>|list|test]", "error")
 
+async def command_trigger(app: App, args: list[str]):
+    """Manages event-driven triggers (Usage: /trigger [list|add <pattern> => <action>|del <id>|toggle <id>])."""
+    renderer = getattr(app, "renderer", None)
+    scripts = getattr(app, "scripts", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not scripts:
+        write_out("Script engine not available.", "error")
+        return
+
+    subcmd = args[0].lower() if args else "list"
+
+    if subcmd in ("list", "show"):
+        triggers = scripts.list_triggers()
+        if not triggers:
+            write_out("No triggers registered.", "warning")
+            return
+        write_out("[bold cyan]Active Triggers:[/]")
+        for t in triggers:
+            status = "[green]ON[/]" if t.enabled else "[red]OFF[/]"
+            write_out(f"  #{t.id} [{status}] [yellow]{t.pattern}[/] => [white]{t.action}[/]")
+
+    elif subcmd in ("add", "new"):
+        full_def = " ".join(args[1:])
+        if "=>" not in full_def:
+            write_out("Usage: /trigger add <pattern> => <action>", "error")
+            return
+        pattern_str, action_str = full_def.split("=>", 1)
+        pattern_str = pattern_str.strip()
+        action_str = action_str.strip()
+        if not pattern_str or not action_str:
+            write_out("Both pattern and action must be specified.", "error")
+            return
+        try:
+            tid = scripts.add_trigger(pattern_str, action_str)
+            write_out(f"Trigger #{tid} created: [yellow]{pattern_str}[/] => [white]{action_str}[/]", "success")
+        except Exception as e:
+            write_out(f"Invalid regular expression: {e}", "error")
+
+    elif subcmd in ("del", "delete", "remove"):
+        if len(args) < 2 or not args[1].isdigit():
+            write_out("Usage: /trigger del <id>", "error")
+            return
+        tid = int(args[1])
+        if scripts.remove_trigger(tid):
+            write_out(f"Trigger #{tid} deleted.", "success")
+        else:
+            write_out(f"Trigger #{tid} not found.", "warning")
+
+    elif subcmd in ("toggle", "enable", "disable"):
+        if len(args) < 2 or not args[1].isdigit():
+            write_out("Usage: /trigger toggle <id>", "error")
+            return
+        tid = int(args[1])
+        state = scripts.toggle_trigger(tid)
+        if state is not None:
+            write_out(f"Trigger #{tid} is now {'ENABLED' if state else 'DISABLED'}.", "success")
+        else:
+            write_out(f"Trigger #{tid} not found.", "warning")
+
+    else:
+        write_out(f"Unknown /trigger command: '{subcmd}'. Usage: /trigger [list|add <pattern> => <action>|del <id>|toggle <id>]", "error")
+
+async def command_ticker(app: App, args: list[str]):
+    """Manages repeating timed tasks (Usage: /ticker [list|add <seconds> <command>|del <id>])."""
+    renderer = getattr(app, "renderer", None)
+    scripts = getattr(app, "scripts", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not scripts:
+        write_out("Script engine not available.", "error")
+        return
+
+    subcmd = args[0].lower() if args else "list"
+
+    if subcmd in ("list", "show"):
+        tickers = scripts.list_tickers()
+        if not tickers:
+            write_out("No tickers currently running.", "warning")
+            return
+        write_out("[bold cyan]Active Tickers:[/]")
+        for t in tickers:
+            write_out(f"  #{t.id} [yellow]Every {t.interval}s[/] => [white]{t.command}[/]")
+
+    elif subcmd in ("add", "start"):
+        if len(args) < 3:
+            write_out("Usage: /ticker add <seconds> <command>", "error")
+            return
+        try:
+            interval = float(args[1])
+            if interval <= 0:
+                raise ValueError
+        except ValueError:
+            write_out(f"Invalid interval: '{args[1]}'. Must be a positive number of seconds.", "error")
+            return
+        command = " ".join(args[2:])
+        tid = scripts.add_ticker(interval, command)
+        write_out(f"Ticker #{tid} started (every {interval}s): [white]{command}[/]", "success")
+
+    elif subcmd in ("del", "stop", "remove"):
+        if len(args) < 2 or not args[1].isdigit():
+            write_out("Usage: /ticker del <id>", "error")
+            return
+        tid = int(args[1])
+        if scripts.remove_ticker(tid):
+            write_out(f"Ticker #{tid} stopped.", "success")
+        else:
+            write_out(f"Ticker #{tid} not found.", "warning")
+
+    else:
+        write_out(f"Unknown /ticker command: '{subcmd}'. Usage: /ticker [list|add <seconds> <command>|del <id>]", "error")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -235,6 +371,8 @@ COMMAND_REGISTRY = {
     "log": command_log,
     "macro": command_macro,
     "notify": command_notify,
+    "trigger": command_trigger,
+    "ticker": command_ticker,
 }
 
 # --- Main Processor ---
