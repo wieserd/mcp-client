@@ -16,11 +16,13 @@ class MCPClientSession:
         command: str,
         args: list[str] | None = None,
         env: dict[str, str] | None = None,
+        cwd: str | None = None,
     ):
         self.name = name
         self.command = command
         self.args = args or []
         self.env = env or {}
+        self.cwd = cwd
         self.process: asyncio.subprocess.Process | None = None
 
         self._request_id: int = 1
@@ -56,6 +58,7 @@ class MCPClientSession:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=full_env,
+                cwd=self.cwd,
             )
         except Exception as e:
             self.status = "error"
