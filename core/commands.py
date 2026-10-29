@@ -594,6 +594,199 @@ async def command_clear(app: App, args: list[str]):
     else:
         app.query_one("#chat_window").clear()
 
+async def command_servers(app: App, args: list[str]):
+    """Manages AI Model Context Protocol (MCP) servers (Usage: /servers [list|start <n>|stop <n>|add <n> <cmd> [args...]])."""
+    renderer = getattr(app, "renderer", None)
+    mgr = getattr(app, "server_manager", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not mgr:
+        write_out("MCP Server Manager is not available.", "error")
+        return
+
+    subcmd = args[0].lower() if args else "list"
+
+    if subcmd in ("list", "show"):
+        servers = mgr.list_servers()
+        if not servers:
+            write_out("No MCP servers registered. Add one with /servers add <name> <cmd> [args...]", "warning")
+            return
+        write_out("[bold cyan]Registered AI MCP Servers:[/]")
+        for s in servers:
+            status_color = "bold green" if s["status"] == "connected" else ("bold yellow" if s["status"] == "connecting" else "red")
+            status_badge = f"[{status_color}]{s['status'].upper()}[/]"
+            cmd_str = f"{s['command']} {' '.join(s['args'])}".strip()
+            write_out(f"  ● [bold white]{s['name']}[/] [{status_badge}] - [yellow]{s['tools_count']} tools[/], [cyan]{s['resources_count']} resources[/] ({cmd_str})")
+            if s["last_error"]:
+                write_out(f"    [dim red]Error: {s['last_error']}[/dim red]")
+
+    elif subcmd in ("start", "connect"):
+        if len(args) < 2:
+            write_out("Usage: /servers start <server_name>", "error")
+            return
+        name = args[1]
+        session = mgr.get_server(name)
+        if not session:
+            write_out(f"MCP server '{name}' is not registered.", "error")
+            return
+        write_out(f"Starting MCP server [bold cyan]{name}[/] ({session.command} {' '.join(session.args)})...", "info")
+        success = await mgr.start_server(name)
+        if success:
+            tool_cnt = len(session.tools)
+            server_title = session.server_info.get("name", name)
+            write_out(f"MCP server [bold green]{name}[/] connected! (Server: '{server_title}', Tools: {tool_cnt})", "success")
+        else:
+            write_out(f"Failed to start MCP server '{name}': {session.last_error}", "error")
+
+    elif subcmd in ("stop", "disconnect"):
+        if len(args) < 2:
+            write_out("Usage: /servers stop <server_name>", "error")
+            return
+        name = args[1]
+        if await mgr.stop_server(name):
+            write_out(f"MCP server [yellow]{name}[/] stopped.", "warning")
+        else:
+            write_out(f"MCP server '{name}' is not registered.", "error")
+
+    elif subcmd in ("add", "register"):
+        if len(args) < 3:
+            write_out("Usage: /servers add <name> <command> [args...]", "error")
+            return
+        name = args[1]
+        command = args[2]
+        cmd_args = args[3:] if len(args) > 3 else []
+        mgr.register_server(name=name, command=command, args=cmd_args)
+        write_out(f"Registered MCP server [bold green]{name}[/] ({command} {' '.join(cmd_args)}). Type [cyan]/servers start {name}[/] to run.", "success")
+
+    else:
+        write_out(f"Unknown /servers option: '{subcmd}'. Usage: /servers [list|start <n>|stop <n>|add <n> <cmd> [args...]]", "error")
+
+async def command_tools(app: App, args: list[str]):
+    """Lists available AI tools across connected MCP servers (Usage: /tools [tool_name])."""
+    renderer = getattr(app, "renderer", None)
+    mgr = getattr(app, "server_manager", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not mgr:
+        write_out("MCP Server Manager is not available.", "error")
+        return
+
+    all_tools = mgr.get_all_tools()
+    if not all_tools:
+        write_out("No tools available. Ensure an MCP server is started with /servers start <name>.", "warning")
+        return
+
+    if args:
+        target = args[0].strip().lower()
+        match = mgr.find_tool(target)
+        if not match:
+            write_out(f"Tool '{target}' not found.", "warning")
+            return
+        session, tool = match
+        write_out(f"[bold cyan]Tool:[/] [bold yellow]{tool.get('name')}[/] (Server: [green]{session.name}[/])")
+        write_out(f"  [white]Description:[/] {tool.get('description', 'No description.')}")
+        schema = tool.get("inputSchema", {})
+        props = schema.get("properties", {})
+        req = schema.get("required", [])
+        if props:
+            write_out("  [cyan]Parameters:[/]")
+            for p_name, p_info in props.items():
+                is_req = "[red]*(required)[/]" if p_name in req else "[dim](optional)[/]"
+                p_type = p_info.get("type", "any")
+                p_desc = p_info.get("description", "")
+                desc_str = f" - {p_desc}" if p_desc else ""
+                write_out(f"    • [bold white]{p_name}[/] ({p_type}) {is_req}{desc_str}")
+        else:
+            write_out("  [dim]No parameters required.[/dim]")
+        return
+
+    write_out(f"[bold cyan]Available MCP Tools ({len(all_tools)}):[/]")
+    for t in all_tools:
+        srv = t.get("_server", "unknown")
+        name = t.get("name")
+        desc = t.get("description", "No description.")
+        write_out(f"  • [bold yellow]{name}[/] [dim]({srv})[/dim] - {desc}")
+    write_out("Type [cyan]/tools <tool_name>[/] for schema details or [cyan]/call <tool_name> [args][/] to execute.")
+
+async def command_call(app: App, args: list[str]):
+    """Calls an MCP tool by name with optional JSON arguments (Usage: /call <tool_name> [json_arguments])."""
+    import json
+    renderer = getattr(app, "renderer", None)
+    mgr = getattr(app, "server_manager", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not mgr:
+        write_out("MCP Server Manager is not available.", "error")
+        return
+
+    if not args:
+        write_out("Usage: /call <tool_name> [{\"param\": \"value\"}]", "error")
+        return
+
+    tool_name = args[0]
+    json_str = " ".join(args[1:]).strip() if len(args) > 1 else "{}"
+
+    try:
+        arguments = json.loads(json_str) if json_str else {}
+        if not isinstance(arguments, dict):
+            write_out("Arguments must be a valid JSON dictionary object, e.g. {\"path\": \"/tmp\"}", "error")
+            return
+    except json.JSONDecodeError as e:
+        write_out(f"Invalid JSON arguments: {e}", "error")
+        return
+
+    write_out(f"[cyan]Executing MCP tool[/] [bold yellow]{tool_name}[/] with args: [dim]{json.dumps(arguments)}[/]...")
+    try:
+        result = await mgr.call_tool(tool_name, arguments)
+        write_out(f"[bold green]✔ Result from {tool_name}:[/]")
+        content_items = result.get("content", [])
+        if not content_items:
+            write_out("  [dim](Empty response)[/dim]")
+        for item in content_items:
+            if item.get("type") == "text":
+                text_content = item.get("text", "").replace("[", "\\[")
+                write_out(f"  {text_content}")
+            else:
+                write_out(f"  [dim]{item}[/dim]")
+    except Exception as e:
+        write_out(f"[bold red]Tool execution failed: {e}[/]")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -612,6 +805,9 @@ COMMAND_REGISTRY = {
     "search": command_search,
     "find": command_search,
     "clear": command_clear,
+    "servers": command_servers,
+    "tools": command_tools,
+    "call": command_call,
 }
 
 # --- Main Processor ---
