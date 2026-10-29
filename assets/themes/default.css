@@ -26,11 +26,18 @@ RichLog#chat_window {
     padding: 1;
 }
 
+StatusBar#status_bar {
+    background: #14141e;
+    border-top: solid #2c2c3a;
+    color: #a0a0a0;
+    height: 1;
+    padding: 0 1;
+}
+
 Input#input_bar {
     background: #2a2a2a;
     border: round #4a4a4a;
     color: #e0e0e0;
-    dock: bottom;
     height: 3;
     padding: 0 1;
 }
