@@ -847,6 +847,108 @@ async def command_call(app: App, args: list[str]):
     except Exception as e:
         write_out(f"[bold red]Tool execution failed: {e}[/]")
 
+async def command_ai(app: App, args: list[str]):
+    """Prompts the AI model to answer queries and invoke connected MCP tools (Usage: /ai <prompt>)."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not args:
+        write_out("Usage: /ai <your question or prompt>", "error")
+        return
+
+    prompt = " ".join(args)
+    agent = getattr(app, "llm_agent", None)
+    if not agent or not getattr(agent.config, "enabled", False):
+        write_out("LLM agent is disabled. Enable it with /llm toggle or in config/settings.yaml.", "warning")
+        return
+
+    write_out(f"[bold cyan]You:[/] {prompt}")
+
+    def on_status(status_msg: str) -> None:
+        write_out(f"[dim yellow]⚡ {status_msg}[/]")
+
+    try:
+        reply = await agent.process_user_message(prompt, on_status=on_status)
+        write_out(f"[bold magenta]AI Assistant:[/] {reply}")
+    except Exception as e:
+        write_out(f"AI Assistant encountered an error: {e}", "error")
+
+async def command_llm(app: App, args: list[str]):
+    """Configures or inspects the LLM AI assistant (Usage: /llm [status|toggle|provider <p>|model <m>|clear])."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    agent = getattr(app, "llm_agent", None)
+    if not agent:
+        write_out("LLM agent is not initialized.", "error")
+        return
+
+    subcmd = args[0].lower() if args else "status"
+
+    if subcmd in ("status", "info"):
+        status_color = "bold green" if agent.config.enabled else "bold red"
+        status_text = "ENABLED" if agent.config.enabled else "DISABLED"
+        write_out("[bold cyan]LLM AI Assistant Status:[/]")
+        write_out(f"  ● Status: [{status_color}]{status_text}[/]")
+        write_out(f"  ● Provider: [bold white]{agent.config.provider}[/]")
+        write_out(f"  ● Model: [bold white]{agent.config.model}[/]")
+        write_out(f"  ● Endpoint: [dim]{agent.config.base_url}[/dim]")
+
+    elif subcmd == "toggle":
+        agent.config.enabled = not agent.config.enabled
+        state = "enabled" if agent.config.enabled else "disabled"
+        write_out(f"LLM AI Assistant is now [bold cyan]{state}[/].", "success")
+
+    elif subcmd in ("provider", "set-provider"):
+        if len(args) < 2:
+            write_out("Usage: /llm provider <ollama|openai|mock>", "error")
+            return
+        new_provider = args[1].lower()
+        if new_provider not in ("ollama", "openai", "mock"):
+            write_out(f"Invalid provider '{new_provider}'. Options: ollama, openai, mock", "error")
+            return
+        agent.config.provider = new_provider
+        write_out(f"LLM provider updated to [bold green]{new_provider}[/].", "success")
+
+    elif subcmd in ("model", "set-model"):
+        if len(args) < 2:
+            write_out("Usage: /llm model <model_name>", "error")
+            return
+        new_model = args[1]
+        agent.config.model = new_model
+        write_out(f"LLM model updated to [bold green]{new_model}[/].", "success")
+
+    elif subcmd in ("clear", "reset"):
+        agent.conversation_history.clear()
+        write_out("LLM conversation history cleared.", "success")
+
+    else:
+        write_out(f"Unknown /llm option: '{subcmd}'. Usage: /llm [status|toggle|provider <p>|model <m>|clear]", "error")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -870,6 +972,9 @@ COMMAND_REGISTRY = {
     "call": command_call,
     "sidebar": command_sidebar,
     "explorer": command_sidebar,
+    "ai": command_ai,
+    "ask": command_ai,
+    "llm": command_llm,
 }
 
 # --- Main Processor ---
@@ -888,19 +993,46 @@ async def process_command(app: App, user_input: str, depth: int = 0):
         return
 
     if not stripped.startswith("/"):
-        if app.connection.writer and app.connection.connected:
-            # Add a newline because servers expect it
+        if getattr(app, "connection", None) and app.connection.connected:
+            # Active TCP connection mode
             app.connection.writer.write(stripped.encode() + b'\n')
             await app.connection.writer.drain()
             if renderer:
                 renderer.write_sent(stripped)
             else:
                 app.query_one("#chat_window").write(f"[orange]TO SERVER:[/] {stripped}")
-        else:
+            return
+
+        # AI MCP Agent Mode
+        agent = getattr(app, "llm_agent", None)
+        if agent and getattr(agent.config, "enabled", False):
             if renderer:
-                renderer.write_error("Not connected. Use /connect to establish a connection.")
+                renderer.write(f"[bold cyan]You:[/] {stripped}")
             else:
-                app.query_one("#chat_window").write("[bold red]Not connected. Use /connect to establish a connection.[/]")
+                app.query_one("#chat_window").write(f"You: {stripped}")
+
+            def on_status(status_msg: str) -> None:
+                if renderer:
+                    renderer.write(f"[dim yellow]⚡ {status_msg}[/]")
+
+            try:
+                reply = await agent.process_user_message(stripped, on_status=on_status)
+                if renderer:
+                    renderer.write(f"[bold magenta]AI Assistant:[/] {reply}")
+                else:
+                    app.query_one("#chat_window").write(f"AI Assistant: {reply}")
+            except Exception as e:
+                if renderer:
+                    renderer.write_error(f"AI Assistant error: {e}")
+                else:
+                    app.query_one("#chat_window").write(f"[bold red]AI Assistant error: {e}[/]")
+            return
+
+        if renderer:
+            renderer.write_warning("No active LLM agent or connection.")
+            renderer.write("Type [cyan]/help[/] for commands or [cyan]/call <tool>[/] to run MCP tools.")
+        else:
+            app.query_one("#chat_window").write("[yellow]No active LLM agent or connection.[/]")
         return
 
     parts = stripped[1:].split()
