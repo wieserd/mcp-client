@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
+import asyncio
 from rich.text import Text
 
 if TYPE_CHECKING:
@@ -69,6 +70,14 @@ class OutputRenderer:
             # Server text might have rich markup characters like '['; treat raw server text cleanly
             log.write(Text(text))
         self._log(text, category="chat")
+
         notifications = getattr(self.app, "notifications", None)
         if notifications:
             notifications.check_incoming(text)
+
+        scripts = getattr(self.app, "scripts", None)
+        if scripts:
+            triggered_cmds = scripts.evaluate_triggers(text)
+            for cmd in triggered_cmds:
+                from core.commands import process_command
+                asyncio.create_task(process_command(self.app, cmd))
