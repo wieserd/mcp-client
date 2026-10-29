@@ -28,16 +28,21 @@ class Connection:
     def renderer(self):
         return getattr(self.app, "renderer", None)
 
-    def cancel_reconnect(self) -> None:
-        """Cancels any pending auto-reconnect task."""
-        if self._reconnect_task and not self._reconnect_task.done():
-            self._reconnect_task.cancel()
+    async def cancel_reconnect(self) -> None:
+        """Cancels and awaits any pending auto-reconnect task."""
+        task = self._reconnect_task
         self._reconnect_task = None
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     async def connect(self, host: str, port: int, is_reconnect: bool = False) -> None:
         """Establishes a connection to the server and starts listening for messages."""
         if not is_reconnect:
-            self.cancel_reconnect()
+            await self.cancel_reconnect()
             self._manual_disconnect = False
 
         self._last_host = host
@@ -72,7 +77,7 @@ class Connection:
         """Closes the connection to the server."""
         if manual:
             self._manual_disconnect = True
-            self.cancel_reconnect()
+            await self.cancel_reconnect()
 
         # Cancel the listener task if still running and not currently executing disconnect
         if self._listen_task and self._listen_task is not asyncio.current_task() and not self._listen_task.done():
@@ -108,7 +113,8 @@ class Connection:
 
     def _trigger_auto_reconnect(self) -> None:
         """Schedules auto-reconnect in a background task."""
-        self.cancel_reconnect()
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
         self._reconnect_task = asyncio.create_task(self._auto_reconnect_loop())
 
     async def _auto_reconnect_loop(self) -> None:
