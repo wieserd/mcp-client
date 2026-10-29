@@ -48,18 +48,42 @@ async def command_connect(app: App, args: list[str]):
                 app.query_one("#chat_window").write(f"[bold red]{msg}[/]")
             return
 
-    await app.connection.connect(host, port)
+    try:
+        await app.connection.connect(host, port)
+    except Exception:
+        pass
 
 async def command_disconnect(app: App, args: list[str]):
     """Disconnects from the server."""
     renderer = getattr(app, "renderer", None)
-    if app.connection.connected:
-        await app.connection.disconnect()
+    is_active = app.connection.connected or (
+        app.connection._reconnect_task and not app.connection._reconnect_task.done()
+    )
+    if is_active:
+        await app.connection.disconnect(manual=True)
     else:
         if renderer:
             renderer.write_warning("Not currently connected.")
         else:
             app.query_one("#chat_window").write("[yellow]Not currently connected.[/]")
+
+async def command_reconnect(app: App, args: list[str]):
+    """Reconnects to the last connected server (Usage: /reconnect)."""
+    host = app.connection._last_host
+    port = app.connection._last_port
+
+    if not host or not port:
+        server_config = getattr(app.config, "server", None) or (app.config.get("server", {}) if isinstance(app.config, dict) else {})
+        host = getattr(server_config, "host", "localhost") if hasattr(server_config, "host") else server_config.get("host", "localhost")
+        port = getattr(server_config, "port", 6667) if hasattr(server_config, "port") else server_config.get("port", 6667)
+
+    if app.connection.connected:
+        await app.connection.disconnect(manual=True)
+
+    try:
+        await app.connection.connect(host, port)
+    except Exception:
+        pass
 
 async def command_log(app: App, args: list[str]):
     """Controls session logging (Usage: /log [on|off|status])."""
@@ -368,6 +392,7 @@ COMMAND_REGISTRY = {
     "help": command_help,
     "connect": command_connect,
     "disconnect": command_disconnect,
+    "reconnect": command_reconnect,
     "log": command_log,
     "macro": command_macro,
     "notify": command_notify,
