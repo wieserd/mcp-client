@@ -456,6 +456,100 @@ async def command_users(app: App, args: list[str]):
     else:
         write_out(f"Unknown /users option: '{subcmd}'. Usage: /users [list|toggle|add <name>|del <name>|clear]", "error")
 
+async def command_status(app: App, args: list[str]):
+    """Displays comprehensive client telemetry or toggles the status bar (Usage: /status [bar [toggle|on|off]])."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    # Check for /status bar subcommands
+    if args and args[0].lower() == "bar":
+        try:
+            from ui.status_bar import StatusBar
+            bar = app.query_one(StatusBar)
+        except Exception:
+            bar = None
+
+        if not bar:
+            write_out("Status bar widget is not loaded.", "warning")
+            return
+
+        action = args[1].lower() if len(args) > 1 else "toggle"
+        if action in ("toggle", "switch"):
+            visible = bar.toggle()
+            write_out(f"Status bar is now {'shown' if visible else 'hidden'}.", "success")
+        elif action in ("on", "show"):
+            bar.remove_class("hidden")
+            write_out("Status bar shown.", "success")
+        elif action in ("off", "hide"):
+            bar.add_class("hidden")
+            write_out("Status bar hidden.", "warning")
+        else:
+            write_out("Usage: /status bar [toggle|on|off]", "error")
+        return
+
+    # Full diagnostic status report
+    write_out("[bold cyan]═══ MCP Client Status ═══[/]")
+
+    # 1. Connection
+    conn = getattr(app, "connection", None)
+    if conn and conn.connected:
+        target = f"{conn._last_host}:{conn._last_port}" if conn._last_port else conn._last_host
+        write_out(f"  [bold green]● Connection:[/] Connected to [white]{target}[/]")
+    elif conn and conn._reconnect_task and not conn._reconnect_task.done():
+        write_out("  [bold yellow]● Connection:[/] Reconnecting in background...")
+    else:
+        write_out("  [bold red]● Connection:[/] Disconnected")
+
+    # 2. Logging
+    logger = getattr(app, "logger", None)
+    if logger and logger.enabled:
+        write_out(f"  [cyan]● Logger:[/] Enabled (level: {logger.level}, dir: {logger.log_dir})")
+    else:
+        write_out("  [dim]● Logger:[/] Disabled")
+
+    # 3. Notifications
+    notify = getattr(app, "notifications", None)
+    if notify and notify.enabled:
+        kws = notify.list_keywords()
+        sound_str = " (sound ON)" if notify.sound else " (sound OFF)"
+        write_out(f"  [magenta]● Notifications:[/] Enabled{sound_str} | Watched: {len(kws)}")
+    else:
+        write_out("  [dim]● Notifications:[/] Disabled")
+
+    # 4. Macros
+    macros = getattr(app, "macros", None)
+    macro_count = len(macros.list_macros()) if macros else 0
+    write_out(f"  [green]● Macros:[/] {macro_count} registered")
+
+    # 5. Triggers & Tickers
+    scripts = getattr(app, "scripts", None)
+    if scripts:
+        trig_count = len(scripts.list_triggers())
+        tick_count = len(scripts.list_tickers())
+        write_out(f"  [yellow]● Automation:[/] {trig_count} triggers, {tick_count} active tickers")
+
+    # 6. Users / Occupants
+    try:
+        from ui.user_list import UserListSidebar
+        sidebar = app.query_one(UserListSidebar)
+        user_count = len(sidebar.get_users())
+    except Exception:
+        user_count = 0
+    write_out(f"  [blue]● User List:[/] {user_count} occupants active")
+    write_out("[bold cyan]═════════════════════════[/]")
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -470,6 +564,7 @@ COMMAND_REGISTRY = {
     "trigger": command_trigger,
     "ticker": command_ticker,
     "users": command_users,
+    "status": command_status,
 }
 
 # --- Main Processor ---
