@@ -550,6 +550,50 @@ async def command_status(app: App, args: list[str]):
     write_out(f"  [blue]● User List:[/] {user_count} occupants active")
     write_out("[bold cyan]═════════════════════════[/]")
 
+async def command_search(app: App, args: list[str]):
+    """Searches past scrollback messages (Usage: /search <query> or /find <query>)."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not args:
+        write_out("Usage: /search <query> (or press Ctrl+F to open the search bar)", "error")
+        return
+
+    query = " ".join(args).strip()
+    if not renderer:
+        write_out("Renderer not available.", "error")
+        return
+
+    results = renderer.search_history(query)
+    if not results:
+        write_out(f"Search: No matches found for '{query}'.", "warning")
+    else:
+        write_out(f"[bold cyan]Search results for '[yellow]{query}[/]' ({len(results)} matches):[/]")
+        for entry in results:
+            time_str = entry.timestamp.strftime("%H:%M:%S")
+            escaped_text = entry.text.replace("[", "\\[")
+            write_out(f"  [dim]({time_str})[/dim] {escaped_text}")
+
+async def command_clear(app: App, args: list[str]):
+    """Clears the chat log window display (Usage: /clear)."""
+    renderer = getattr(app, "renderer", None)
+    if renderer:
+        renderer.clear_display()
+    else:
+        app.query_one("#chat_window").clear()
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -565,6 +609,9 @@ COMMAND_REGISTRY = {
     "ticker": command_ticker,
     "users": command_users,
     "status": command_status,
+    "search": command_search,
+    "find": command_search,
+    "clear": command_clear,
 }
 
 # --- Main Processor ---
