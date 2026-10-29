@@ -649,6 +649,11 @@ async def command_servers(app: App, args: list[str]):
             write_out(f"MCP server [bold green]{name}[/] connected! (Server: '{server_title}', Tools: {tool_cnt})", "success")
         else:
             write_out(f"Failed to start MCP server '{name}': {session.last_error}", "error")
+        try:
+            from ui.server_sidebar import ServerToolsSidebar
+            app.query_one(ServerToolsSidebar).refresh_servers()
+        except Exception:
+            pass
 
     elif subcmd in ("stop", "disconnect"):
         if len(args) < 2:
@@ -659,6 +664,11 @@ async def command_servers(app: App, args: list[str]):
             write_out(f"MCP server [yellow]{name}[/] stopped.", "warning")
         else:
             write_out(f"MCP server '{name}' is not registered.", "error")
+        try:
+            from ui.server_sidebar import ServerToolsSidebar
+            app.query_one(ServerToolsSidebar).refresh_servers()
+        except Exception:
+            pass
 
     elif subcmd in ("add", "register"):
         if len(args) < 3:
@@ -669,9 +679,59 @@ async def command_servers(app: App, args: list[str]):
         cmd_args = args[3:] if len(args) > 3 else []
         mgr.register_server(name=name, command=command, args=cmd_args)
         write_out(f"Registered MCP server [bold green]{name}[/] ({command} {' '.join(cmd_args)}). Type [cyan]/servers start {name}[/] to run.", "success")
+        try:
+            from ui.server_sidebar import ServerToolsSidebar
+            app.query_one(ServerToolsSidebar).refresh_servers()
+        except Exception:
+            pass
+
+    elif subcmd in ("toggle", "sidebar"):
+        await command_sidebar(app, args[1:])
 
     else:
-        write_out(f"Unknown /servers option: '{subcmd}'. Usage: /servers [list|start <n>|stop <n>|add <n> <cmd> [args...]]", "error")
+        write_out(f"Unknown /servers option: '{subcmd}'. Usage: /servers [list|start <n>|stop <n>|add <n> <cmd> [args...]|toggle]", "error")
+
+async def command_sidebar(app: App, args: list[str]):
+    """Toggles or refreshes the MCP Server & Tool Explorer sidebar (Usage: /sidebar [toggle|refresh])."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    sidebar = None
+    try:
+        from ui.server_sidebar import ServerToolsSidebar
+        sidebar = app.query_one(ServerToolsSidebar)
+    except Exception:
+        pass
+
+    subcmd = args[0].lower() if args else "toggle"
+
+    if subcmd in ("toggle", "hide", "show"):
+        if sidebar:
+            visible = sidebar.toggle()
+            state = "shown" if visible else "hidden"
+            write_out(f"MCP Explorer sidebar is now [bold cyan]{state}[/].", "success")
+        else:
+            write_out("MCP Explorer sidebar is not available.", "warning")
+    elif subcmd in ("refresh", "reload"):
+        if sidebar:
+            sidebar.refresh_servers()
+            write_out("MCP Explorer sidebar refreshed.", "success")
+        else:
+            write_out("MCP Explorer sidebar is not available.", "warning")
+    else:
+        write_out(f"Unknown /sidebar option: '{subcmd}'. Usage: /sidebar [toggle|refresh]", "error")
 
 async def command_tools(app: App, args: list[str]):
     """Lists available AI tools across connected MCP servers (Usage: /tools [tool_name])."""
@@ -808,6 +868,8 @@ COMMAND_REGISTRY = {
     "servers": command_servers,
     "tools": command_tools,
     "call": command_call,
+    "sidebar": command_sidebar,
+    "explorer": command_sidebar,
 }
 
 # --- Main Processor ---
