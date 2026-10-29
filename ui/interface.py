@@ -9,6 +9,7 @@ from core.commands import process_command
 from core.connection import Connection
 from core.mcp_parser import MCPParser
 from core.server_manager import MCPServerManager
+from core.llm_agent import AIToolAgent
 from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
 from ui.server_sidebar import ServerToolsSidebar
@@ -62,6 +63,12 @@ class MCPApp(App):
         self.renderer = OutputRenderer(self)
         self.parser = MCPParser(self)
         self.connection = Connection(self)
+
+        llm_cfg = getattr(config, "llm", None)
+        if not llm_cfg:
+            from config.loader import LLMConfig
+            llm_cfg = LLMConfig()
+        self.llm_agent = AIToolAgent(config=llm_cfg, server_manager=self.server_manager)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
