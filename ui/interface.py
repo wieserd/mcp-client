@@ -7,6 +7,7 @@ from rich.text import Text
 from core.commands import process_command
 from core.connection import Connection
 from core.mcp_parser import MCPParser
+from core.server_manager import MCPServerManager
 from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
 from ui.user_list import UserListSidebar
@@ -45,6 +46,17 @@ class MCPApp(App):
 
         self.notifications = NotificationManager(app=self)
         self.scripts = ScriptManager(app=self)
+        self.server_manager = MCPServerManager()
+        mcp_servers = getattr(config, "mcp_servers", {})
+        if isinstance(mcp_servers, dict):
+            for s_name, s_def in mcp_servers.items():
+                self.server_manager.register_server(
+                    name=s_name,
+                    command=s_def.command,
+                    args=s_def.args,
+                    env=s_def.env,
+                )
+
         self.renderer = OutputRenderer(self)
         self.parser = MCPParser(self)
         self.connection = Connection(self)
@@ -149,6 +161,8 @@ class MCPApp(App):
 
     async def on_quit(self) -> None:
         """Called when the app is quitting."""
+        if hasattr(self, "server_manager"):
+            await self.server_manager.stop_all()
         if hasattr(self, "scripts"):
             self.scripts.stop_all()
         if self.connection.connected:
