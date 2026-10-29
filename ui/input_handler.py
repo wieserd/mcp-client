@@ -13,6 +13,9 @@ SUBCOMMANDS: dict[str, list[str]] = {
     "ticker": ["list", "add", "del"],
     "users": ["list", "toggle", "add", "del", "clear"],
     "status": ["bar"],
+    "servers": ["list", "start", "stop", "add", "toggle"],
+    "sidebar": ["toggle", "refresh"],
+    "explorer": ["toggle", "refresh"],
 }
 
 
@@ -111,9 +114,11 @@ class HistoryInput(Input):
     def _get_available_commands(self) -> list[str]:
         """Returns all built-in commands plus registered user macros."""
         commands = [
+            "call",
             "clear",
             "connect",
             "disconnect",
+            "explorer",
             "find",
             "help",
             "log",
@@ -122,8 +127,11 @@ class HistoryInput(Input):
             "quit",
             "reconnect",
             "search",
+            "servers",
+            "sidebar",
             "status",
             "ticker",
+            "tools",
             "trigger",
             "users",
         ]
@@ -133,6 +141,28 @@ class HistoryInput(Input):
                 if m not in commands:
                     commands.append(m)
         return sorted(commands)
+
+    def _get_server_names(self, running_only: bool = False) -> list[str]:
+        """Returns registered or running MCP server names."""
+        mgr = getattr(self.app, "server_manager", None)
+        if not mgr:
+            return []
+        if running_only:
+            return [name for name, session in mgr.servers.items() if session.status == "connected"]
+        return list(mgr.servers.keys())
+
+    def _get_tool_names(self) -> list[str]:
+        """Returns all tool names available across connected MCP servers."""
+        mgr = getattr(self.app, "server_manager", None)
+        if not mgr:
+            return []
+        tools = mgr.get_all_tools()
+        names = set()
+        for t in tools:
+            name = t.get("name")
+            if name:
+                names.add(name)
+        return sorted(names)
 
     def _get_active_users(self) -> list[str]:
         """Returns the list of active users from the user sidebar."""
@@ -144,14 +174,17 @@ class HistoryInput(Input):
             return []
 
     def action_autocomplete(self) -> None:
-        """Autocompletes commands, subcommands, or user names on Tab."""
+        """Autocompletes commands, subcommands, MCP tools/servers, or user names on Tab."""
         # If currently in an active tab completion cycle, cycle to next candidate
         if self._tab_candidates and self._tab_index != -1:
-            self._tab_index = (self._tab_index + 1) % len(self._tab_candidates)
-            candidate = self._tab_candidates[self._tab_index]
-            self.value = f"{self._tab_base}{candidate} "
-            self.cursor_position = len(self.value)
-            return
+            if len(self._tab_candidates) > 1:
+                self._tab_index = (self._tab_index + 1) % len(self._tab_candidates)
+                candidate = self._tab_candidates[self._tab_index]
+                self.value = f"{self._tab_base}{candidate} "
+                self.cursor_position = len(self.value)
+                return
+            else:
+                self._reset_tab_cycle()
 
         text = self.value
 
@@ -161,11 +194,14 @@ class HistoryInput(Input):
             all_cmds = self._get_available_commands()
             matches = [cmd for cmd in all_cmds if cmd.lower().startswith(prefix)]
             if matches:
-                self._tab_base = "/"
-                self._tab_candidates = matches
-                self._tab_index = 0
                 self.value = f"/{matches[0]} "
                 self.cursor_position = len(self.value)
+                if len(matches) > 1:
+                    self._tab_base = "/"
+                    self._tab_candidates = matches
+                    self._tab_index = 0
+                else:
+                    self._reset_tab_cycle()
             return
 
         # 2. Subcommand and argument completion
@@ -174,7 +210,62 @@ class HistoryInput(Input):
             trailing_space = text.endswith(" ")
             cmd_name = parts[0].lower()
 
-            # A. User / Occupant name completion for /users del, /notify watch, /notify unwatch
+            # A. MCP Tool completion for /call <tool> and /tools <tool>
+            if cmd_name in ("call", "tools"):
+                prefix = "" if trailing_space else parts[-1].lower() if len(parts) > 1 else ""
+                tool_names = self._get_tool_names()
+                matches = [t for t in tool_names if t.lower().startswith(prefix)]
+                if matches:
+                    base_tokens = parts[:-1] if (len(parts) > 1 and not trailing_space) else parts
+                    base = f"/{' '.join(base_tokens)} "
+                    self.value = f"{base}{matches[0]} "
+                    self.cursor_position = len(self.value)
+                    if len(matches) > 1:
+                        self._tab_base = base
+                        self._tab_candidates = matches
+                        self._tab_index = 0
+                    else:
+                        self._reset_tab_cycle()
+                return
+
+            # B. MCP Server argument completion for /servers start <name> and /servers stop <name>
+            if cmd_name == "servers" and len(parts) >= 2:
+                subcmd = parts[1].lower()
+                if subcmd in ("start", "connect") and (len(parts) > 2 or trailing_space):
+                    prefix = "" if trailing_space else parts[-1].lower() if len(parts) > 2 else ""
+                    servers = self._get_server_names(running_only=False)
+                    matches = [s for s in servers if s.lower().startswith(prefix)]
+                    if matches:
+                        base_tokens = parts[:-1] if (len(parts) > 2 and not trailing_space) else parts
+                        base = f"/{' '.join(base_tokens)} "
+                        self.value = f"{base}{matches[0]} "
+                        self.cursor_position = len(self.value)
+                        if len(matches) > 1:
+                            self._tab_base = base
+                            self._tab_candidates = matches
+                            self._tab_index = 0
+                        else:
+                            self._reset_tab_cycle()
+                    return
+
+                if subcmd in ("stop", "disconnect") and (len(parts) > 2 or trailing_space):
+                    prefix = "" if trailing_space else parts[-1].lower() if len(parts) > 2 else ""
+                    servers = self._get_server_names(running_only=True)
+                    matches = [s for s in servers if s.lower().startswith(prefix)]
+                    if matches:
+                        base_tokens = parts[:-1] if (len(parts) > 2 and not trailing_space) else parts
+                        base = f"/{' '.join(base_tokens)} "
+                        self.value = f"{base}{matches[0]} "
+                        self.cursor_position = len(self.value)
+                        if len(matches) > 1:
+                            self._tab_base = base
+                            self._tab_candidates = matches
+                            self._tab_index = 0
+                        else:
+                            self._reset_tab_cycle()
+                    return
+
+            # C. User / Occupant name completion for /users del, /notify watch, /notify unwatch
             if (cmd_name in ("users", "user") and len(parts) >= 2 and parts[1].lower() in ("del", "remove", "leave")) or \
                (cmd_name in ("notify") and len(parts) >= 2 and parts[1].lower() in ("watch", "unwatch", "add", "del")):
                 prefix = "" if trailing_space else parts[-1].lower()
@@ -182,24 +273,32 @@ class HistoryInput(Input):
                 matches = [u for u in active_users if u.lower().startswith(prefix)]
                 if matches:
                     base_tokens = parts[:-1] if not trailing_space else parts
-                    self._tab_base = f"/{' '.join(base_tokens)} "
-                    self._tab_candidates = matches
-                    self._tab_index = 0
-                    self.value = f"{self._tab_base}{matches[0]} "
+                    base = f"/{' '.join(base_tokens)} "
+                    self.value = f"{base}{matches[0]} "
                     self.cursor_position = len(self.value)
+                    if len(matches) > 1:
+                        self._tab_base = base
+                        self._tab_candidates = matches
+                        self._tab_index = 0
+                    else:
+                        self._reset_tab_cycle()
                 return
 
-            # B. Subcommands completion (e.g. "/log ", "/macro s")
+            # D. Subcommands completion (e.g. "/log ", "/macro s", "/servers st", "/sidebar ")
             if cmd_name in SUBCOMMANDS:
                 sub_prefix = "" if trailing_space else parts[1].lower() if len(parts) > 1 else ""
                 candidates = SUBCOMMANDS[cmd_name]
                 matches = [s for s in candidates if s.lower().startswith(sub_prefix)]
                 if matches:
-                    self._tab_base = f"/{cmd_name} "
-                    self._tab_candidates = matches
-                    self._tab_index = 0
-                    self.value = f"{self._tab_base}{matches[0]} "
+                    base = f"/{cmd_name} "
+                    self.value = f"{base}{matches[0]} "
                     self.cursor_position = len(self.value)
+                    if len(matches) > 1:
+                        self._tab_base = base
+                        self._tab_candidates = matches
+                        self._tab_index = 0
+                    else:
+                        self._reset_tab_cycle()
                 return
 
         # 3. Direct player mention completion (e.g. "@Ali")
@@ -211,9 +310,12 @@ class HistoryInput(Input):
                 matches = [u for u in active_users if u.lower().startswith(prefix)]
                 if matches:
                     base = text[: len(text) - len(last_word)]
-                    self._tab_base = f"{base}@"
-                    self._tab_candidates = matches
-                    self._tab_index = 0
-                    self.value = f"{self._tab_base}{matches[0]} "
+                    self.value = f"{base}@{matches[0]} "
                     self.cursor_position = len(self.value)
+                    if len(matches) > 1:
+                        self._tab_base = f"{base}@"
+                        self._tab_candidates = matches
+                        self._tab_index = 0
+                    else:
+                        self._reset_tab_cycle()
                 return
