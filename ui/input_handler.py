@@ -24,6 +24,7 @@ class HistoryInput(Input):
         Binding("down", "history_down", "Next command", show=False),
         Binding("escape", "clear_input", "Clear input", show=False),
         Binding("tab", "autocomplete", "Autocomplete", priority=True, show=True),
+        Binding("ctrl+f", "app.toggle_search", "Search Scrollback", priority=True, show=False),
     ]
 
     def __init__(self, *args, max_history: int = 100, **kwargs):
@@ -110,14 +111,17 @@ class HistoryInput(Input):
     def _get_available_commands(self) -> list[str]:
         """Returns all built-in commands plus registered user macros."""
         commands = [
+            "clear",
             "connect",
             "disconnect",
+            "find",
             "help",
             "log",
             "macro",
             "notify",
             "quit",
             "reconnect",
+            "search",
             "status",
             "ticker",
             "trigger",
