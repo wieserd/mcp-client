@@ -11,6 +11,7 @@ from core.mcp_parser import MCPParser
 from core.server_manager import MCPServerManager
 from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
+from ui.server_sidebar import ServerToolsSidebar
 from ui.user_list import UserListSidebar
 from ui.status_bar import StatusBar
 from ui.search_box import SearchBox
@@ -26,8 +27,8 @@ class MCPApp(App):
     """A Textual-based MCP client."""
 
     BINDINGS = [
-        Binding("f2", "toggle_users", "Toggle User List", show=True),
-        Binding("ctrl+b", "toggle_users", "Toggle User List", show=False),
+        Binding("f2", "toggle_sidebar", "Toggle MCP Sidebar", show=True),
+        Binding("ctrl+b", "toggle_sidebar", "Toggle MCP Sidebar", show=False),
         Binding("f3", "toggle_status_bar", "Toggle Status Bar", show=True),
         Binding("ctrl+f", "toggle_search", "Search Scrollback", show=True),
         Binding("f4", "toggle_search", "Search Scrollback", show=False),
@@ -67,7 +68,7 @@ class MCPApp(App):
         yield Header()
         with Horizontal(id="content_area"):
             yield RichLog(id="chat_window", wrap=True)
-            yield UserListSidebar(id="user_sidebar")
+            yield ServerToolsSidebar(id="server_sidebar")
         yield SearchBox(id="search_box")
         yield StatusBar(id="status_bar")
         yield HistoryInput(placeholder="Enter command or message...", id="input_bar")
@@ -78,12 +79,12 @@ class MCPApp(App):
         self.title = "MCP-Client"
         self.sub_title = "Disconnected"  # Start in a disconnected state
 
-        # Check configured initial visibility for the user sidebar and status bar
+        # Check configured initial visibility for the MCP Explorer sidebar and status bar
         ui_cfg = getattr(self.config, "ui", None) or (self.config.get("ui", {}) if isinstance(self.config, dict) else {})
         show_users = getattr(ui_cfg, "show_user_list", True) if hasattr(ui_cfg, "show_user_list") else ui_cfg.get("show_user_list", True)
         if not show_users:
             try:
-                self.query_one(UserListSidebar).add_class("hidden")
+                self.query_one(ServerToolsSidebar).add_class("hidden")
             except Exception:
                 pass
 
@@ -130,22 +131,35 @@ class MCPApp(App):
                 self.renderer.write_warning(f"Could not connect MCP server '{name}': {err}")
         except Exception as e:
             self.renderer.write_error(f"Error starting MCP server '{name}': {e}")
+        finally:
+            try:
+                self.query_one(ServerToolsSidebar).refresh_servers()
+            except Exception:
+                pass
 
-    def action_toggle_users(self) -> None:
-        """Toggles the visibility of the user sidebar."""
+    def action_toggle_sidebar(self) -> None:
+        """Toggles the visibility of the MCP server & tools sidebar."""
         try:
-            sidebar = self.query_one(UserListSidebar)
+            sidebar = self.query_one(ServerToolsSidebar)
             visible = sidebar.toggle()
             if hasattr(self, "renderer"):
                 state = "shown" if visible else "hidden"
-                self.renderer.write_info(f"User list {state}.")
+                self.renderer.write_info(f"MCP Explorer sidebar {state}.")
         except Exception:
             pass
 
+    def action_toggle_users(self) -> None:
+        """Compatibility action for toggle_users."""
+        self.action_toggle_sidebar()
+
     def _tick_status_bar(self) -> None:
-        """Periodic tick to update the status bar clock and telemetry."""
+        """Periodic tick to update the status bar clock and MCP telemetry."""
         try:
             self.query_one(StatusBar).refresh_status()
+        except Exception:
+            pass
+        try:
+            self.query_one(ServerToolsSidebar).refresh_servers()
         except Exception:
             pass
 
