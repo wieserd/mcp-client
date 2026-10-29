@@ -2,73 +2,100 @@
 
 > ✨ *“A terminal client that feels like a lovechild of a hacker tool, an RPG, and a Discord chat — but fully local, open-source, and built in pure Python.”*
 
-This is a terminal-based MCP (MUD Client Protocol) client with a focus on modern UX, a polished terminal aesthetic, and quality-of-life features for MUD players.
+This is a terminal-based MCP (MUD Client Protocol 2.1) client with a focus on modern UX, a polished terminal aesthetic, and quality-of-life features for MUD/MOO players.
 
 ---
 
 ## ✅ Implemented Functionalities
 
-This project is in its early stages. Here is what has been implemented so far:
+### **Core Infrastructure & Configuration**
+*   **Modular Architecture:** Clean separation of concerns across `config/`, `core/`, `ui/`, and `features/`.
+*   **Typed Dataclass Configuration:** Centralized in `config/loader.py` with `AppConfig`, `ServerConfig`, `UIConfig`, and `LoggingConfig`.
+*   **Resilient Fallbacks:** Graceful handling of missing or corrupted `settings.yaml` with safe default fallbacks and type validation.
+*   **Decoupled Output Architecture:** Centralized `OutputRenderer` in `ui/output_renderer.py` for standardized styling, semantic logging, and decoupling network/parser code from UI widgets.
 
-### **Core Infrastructure**
-*   **Project Scaffolding:** A clean, modular project structure has been created, separating concerns for configuration, core logic, UI, and features.
-*   **Dependency Management:** Uses `requirements.txt` with `textual` for the UI and `pyyaml` for configuration.
-*   **Configuration Loading:** The application loads server details and UI settings from `config/settings.yaml`. The loading logic is centralized in `config/loader.py`.
+### **Networking & MCP 2.1 Protocol**
+*   **Async TCP Engine:** Asynchronous connection manager in `core/connection.py` utilizing Python's `asyncio`.
+*   **Automatic Reconnection & Failover:** Automatically reconnects upon unexpected network dropouts with configurable attempts and delays from `settings.yaml`.
+*   **MCP 2.1 Protocol Parser:** Full message parser in `core/mcp_parser.py` supporting:
+    *   Header parsing with authentication keys and quoted key-value attributes (`key: "value"`).
+    *   Multi-line data packets (`#$#* <tag>` continuation and `#$#: <tag>` termination).
+    *   Automated handshake negotiation replying to server capability broadcasts (`mcp`, `mcp-negotiate-can`, `mcp-negotiate-end`).
+    *   Extensible package registration via `register_handler(command, callback)`.
 
-### **Networking**
-*   **Async TCP Connection:** The client now features an asynchronous TCP connection manager in `core/connection.py`.
-*   **Connection Management:** It can connect to a server, listen for incoming messages, and handle disconnections gracefully.
-*   **Send & Receive:** The client can send user-typed messages to the server and display messages received from the server in the main chat window.
+### **Modern Terminal UI (Textual)**
+*   **Theme & Aesthetic:** Polished dark retro-futuristic theme in `assets/themes/default.css`.
+*   **Split Layout & Room Occupant Sidebar:**
+    *   Right-side collapsible `UserListSidebar` (`ui/user_list.py`) displaying online users and occupants with status indicators.
+    *   Toggled via `F2` / `Ctrl+B` or `/users toggle`.
+*   **Detailed Real-time Status Bar:**
+    *   `StatusBar` widget (`ui/status_bar.py`) providing live telemetry: connection status, current host/port, logger status, notification alerts, trigger/ticker counts, and a real-time digital clock.
+    *   Toggled via `F3` or `/status bar toggle`.
+*   **Interactive Scrollback Search Drawer:**
+    *   Collapsible `SearchBox` (`ui/search_box.py`) triggered by `Ctrl+F` or `F4`.
+    *   Searches past messages with instant match count and timestamped results.
+    *   `Esc` dismisses the search drawer and returns focus to the input bar.
+*   **Smart History & Autocompletion Input:**
+    *   `HistoryInput` (`ui/input_handler.py`) with 100-command circular history (Up/Down arrow navigation).
+    *   Interactive **Tab** completion for slash commands, subcommands, custom macros, and active room occupants (with candidate cycling).
+    *   `Esc` clears the current input bar.
 
-### **Terminal UI (TUI)**
-*   **Modern TUI Framework:** Built using the powerful `textual` library.
-*   **Polished "Vibe":** A dark, retro-futuristic theme is implemented in `assets/themes/default.css`.
-*   **Interactive Layout:**
-    *   A cool ASCII art logo in the header.
-    *   A scrollable, bordered window for chat/log output (`RichLog`).
-    *   An interactive input bar for typing commands and messages.
-*   **Real-time Status:** The subtitle bar now dynamically updates to show the current connection status (e.g., "Disconnected", "Connecting...", "Connected").
-
-### **Command Processing**
-*   **Scalable Command Registry:** The command processor in `core/commands.py` now uses a dictionary-based registry, making it easy to add new commands.
-*   **Local & Remote Command Handling:** The system distinguishes between local client commands (prefixed with `/`) and messages to be sent to the server.
-*   **Implemented Commands:**
-    *   `/connect`: Connects to the server using settings from `config.yaml`.
-    *   `/disconnect`: Disconnects from the server.
-    *   `/help`: Lists all available commands.
-    *   `/quit`: Gracefully disconnects and exits the application.
-
----
-
-## 🚀 Future Improvements
-
-The following features from the original outline are planned for future development:
-
-*   **Network & Protocol Handling:**
-    *   Build the MCP protocol parser in `core/mcp_parser.py` to handle MCP-specific messages.
-    *   Add robust automatic reconnect and failover logic.
-*   **Expanded Command System:**
-    *   Add more local commands (`/macro`, `/log`, `/script`).
-    *   Implement command aliases.
-*   **Advanced UI Features:**
-    *   Display a user list.
-    *   Add a more detailed status/info bar.
-    *   Implement scrollback search in the chat window.
-    *   Add autocompletion for commands and names.
-*   **Quality of Life Features:**
-    *   **Macros:** Implement the full macro system from `features/macros.py`.
-    *   **Scripting:** Build the Python or DSL-based scripting engine.
-    *   **Chat Logger:** Create the session logger in `features/chat_logger.py`.
-    *   **Notifications:** Add sound and UI alerts for events.
-*   **Extended Features:**
-    *   Multi-server tabs.
-    *   Advanced theming support.
-    *   Mouse support for UI interaction.
+### **Player Quality-of-Life Features**
+*   **Macro System (`features/macros.py`):**
+    *   Custom aliases and shortcuts supporting positional parameters (`$1`, `$2`), all-arguments replacement (`$*`), and chained commands (`cmd1; cmd2`).
+    *   Managed dynamically via `/macro`.
+*   **Automation Engine (`features/scripting.py`):**
+    *   **Triggers:** Event-driven regex matching on incoming server text with capture group substitution (`$1`, `$2`, `$0`) to execute automated responses.
+    *   **Tickers:** Repeating timers executing commands periodically at custom intervals.
+*   **Session Logger (`features/chat_logger.py`):**
+    *   Rolling daily log files (`logs/session_YYYY-MM-DD.log`).
+    *   Filters by level (`chat`, `system`, or `full`) and strips ANSI/Rich markup to ensure clean plain-text logs.
+*   **Notifications & Alerts (`features/notifications.py`):**
+    *   Desktop toast notifications via Textual's native alert system.
+    *   Audible terminal bell sounds (`\a`).
+    *   Word-boundary mention detection on watched keywords or character names.
 
 ---
 
-## 🐞 Known Errors & Limitations
+## ⌨️ Keybindings Quick Reference
 
-*   **Raw Protocol Handling:** The client currently displays the raw, unparsed data from the server. It does not yet understand the MCP protocol for features like in-band commands or structured data.
-*   **No Automatic Reconnect:** If the connection is lost, the user must manually use `/connect` to reconnect.
-*   **Configuration is Static:** The `settings.yaml` file is loaded at startup, but there is no in-app way to modify or reload the configuration yet.
+| Key | Action |
+|---|---|
+| **Tab** | Autocomplete command, subcommand, macro, or player name (press again to cycle) |
+| **Up / Down** | Navigate through previous command/message history |
+| **Ctrl + F** / **F4** | Open / Close interactive scrollback search bar |
+| **F2** / **Ctrl + B** | Toggle User / Room Occupant Sidebar |
+| **F3** | Toggle bottom status bar |
+| **Esc** | Close search bar or clear the current input line |
+
+---
+
+## 💻 Available Slash Commands
+
+| Command | Usage | Description |
+|---|---|---|
+| `/connect` | `/connect [host] [port]` | Connect to the server specified in configuration or arguments |
+| `/disconnect` | `/disconnect` | Disconnect gracefully and cancel any auto-reconnection |
+| `/reconnect` | `/reconnect` | Instantly reconnect to the last connected server |
+| `/help` | `/help` | Display list of available commands |
+| `/clear` | `/clear` | Clear the chat display (preserves scrollback search history) |
+| `/search` | `/search <query>` | Search scrollback history for matching messages (alias: `/find`) |
+| `/status` | `/status [bar [toggle\|on\|off]]` | Show diagnostic system report or toggle status bar widget |
+| `/users` | `/users [list\|toggle\|add <n>\|del <n>\|clear]` | Manage or toggle room occupant sidebar |
+| `/macro` | `/macro [list\|set <n> <tmpl>\|del <n>]` | Manage custom command macros and aliases |
+| `/log` | `/log [status\|on\|off]` | View or toggle session file logging |
+| `/notify` | `/notify [status\|on\|off\|sound\|watch <w>\|unwatch <w>\|list\|test]` | Manage audio/toast notifications and keyword alerts |
+| `/trigger` | `/trigger [list\|add <pat> => <act>\|toggle <id>\|del <id>]` | Manage event-driven regex triggers |
+| `/ticker` | `/ticker [list\|add <sec> <cmd>\|del <id>]` | Manage periodic timed background tasks |
+| `/quit` | `/quit` | Gracefully shut down and exit the client |
+
+---
+
+## 🚀 Extended Future Roadmap
+
+The core infrastructure and planned features from the initial roadmap are complete. Future planned extensions include:
+
+*   **Multi-Server Support:** Tabbed interface for concurrent connections to multiple MUD worlds.
+*   **Theming Engine:** Live switching between retro themes (Cyberpunk, Amber CRT, Matrix Green, Classic).
+*   **Hot-Reloadable Configuration:** `/config reload` to reload `settings.yaml` on the fly.
+*   **Mouse Interaction:** Clickable URLs and clickable player names in chat to send tells or open context menus.

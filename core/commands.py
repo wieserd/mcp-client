@@ -48,18 +48,42 @@ async def command_connect(app: App, args: list[str]):
                 app.query_one("#chat_window").write(f"[bold red]{msg}[/]")
             return
 
-    await app.connection.connect(host, port)
+    try:
+        await app.connection.connect(host, port)
+    except Exception:
+        pass
 
 async def command_disconnect(app: App, args: list[str]):
     """Disconnects from the server."""
     renderer = getattr(app, "renderer", None)
-    if app.connection.connected:
-        await app.connection.disconnect()
+    is_active = app.connection.connected or (
+        app.connection._reconnect_task and not app.connection._reconnect_task.done()
+    )
+    if is_active:
+        await app.connection.disconnect(manual=True)
     else:
         if renderer:
             renderer.write_warning("Not currently connected.")
         else:
             app.query_one("#chat_window").write("[yellow]Not currently connected.[/]")
+
+async def command_reconnect(app: App, args: list[str]):
+    """Reconnects to the last connected server (Usage: /reconnect)."""
+    host = app.connection._last_host
+    port = app.connection._last_port
+
+    if not host or not port:
+        server_config = getattr(app.config, "server", None) or (app.config.get("server", {}) if isinstance(app.config, dict) else {})
+        host = getattr(server_config, "host", "localhost") if hasattr(server_config, "host") else server_config.get("host", "localhost")
+        port = getattr(server_config, "port", 6667) if hasattr(server_config, "port") else server_config.get("port", 6667)
+
+    if app.connection.connected:
+        await app.connection.disconnect(manual=True)
+
+    try:
+        await app.connection.connect(host, port)
+    except Exception:
+        pass
 
 async def command_log(app: App, args: list[str]):
     """Controls session logging (Usage: /log [on|off|status])."""
@@ -361,6 +385,215 @@ async def command_ticker(app: App, args: list[str]):
     else:
         write_out(f"Unknown /ticker command: '{subcmd}'. Usage: /ticker [list|add <seconds> <command>|del <id>]", "error")
 
+async def command_users(app: App, args: list[str]):
+    """Manages the online user and room occupant sidebar (Usage: /users [list|toggle|add <name>|del <name>|clear])."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    sidebar = None
+    try:
+        from ui.user_list import UserListSidebar
+        sidebar = app.query_one(UserListSidebar)
+    except Exception:
+        pass
+
+    subcmd = args[0].lower() if args else "list"
+
+    if subcmd in ("toggle", "hide", "show"):
+        if sidebar:
+            visible = sidebar.toggle()
+            state = "shown" if visible else "hidden"
+            write_out(f"User sidebar is now [bold cyan]{state}[/].", "success")
+        else:
+            write_out("User sidebar is not available.", "warning")
+
+    elif subcmd in ("list", "who"):
+        users = sidebar.get_users() if sidebar else []
+        if not users:
+            write_out("No users currently registered in room/user list.", "warning")
+        else:
+            write_out(f"Users online ({len(users)}): [bold cyan]{', '.join(users)}[/]")
+
+    elif subcmd in ("add", "join"):
+        if len(args) < 2:
+            write_out("Usage: /users add <name>", "error")
+            return
+        name = " ".join(args[1:])
+        if sidebar and sidebar.add_user(name):
+            write_out(f"Added [bold cyan]{name}[/] to user list.", "success")
+        else:
+            write_out(f"User [bold cyan]{name}[/] is already in list or sidebar unavailable.", "warning")
+
+    elif subcmd in ("del", "remove", "leave"):
+        if len(args) < 2:
+            write_out("Usage: /users del <name>", "error")
+            return
+        name = " ".join(args[1:])
+        if sidebar and sidebar.remove_user(name):
+            write_out(f"Removed [bold cyan]{name}[/] from user list.", "success")
+        else:
+            write_out(f"User [bold cyan]{name}[/] not found in list.", "warning")
+
+    elif subcmd == "clear":
+        if sidebar:
+            sidebar.clear_users()
+            write_out("Cleared all users from list.", "success")
+        else:
+            write_out("User sidebar is not available.", "warning")
+
+    else:
+        write_out(f"Unknown /users option: '{subcmd}'. Usage: /users [list|toggle|add <name>|del <name>|clear]", "error")
+
+async def command_status(app: App, args: list[str]):
+    """Displays comprehensive client telemetry or toggles the status bar (Usage: /status [bar [toggle|on|off]])."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    # Check for /status bar subcommands
+    if args and args[0].lower() == "bar":
+        try:
+            from ui.status_bar import StatusBar
+            bar = app.query_one(StatusBar)
+        except Exception:
+            bar = None
+
+        if not bar:
+            write_out("Status bar widget is not loaded.", "warning")
+            return
+
+        action = args[1].lower() if len(args) > 1 else "toggle"
+        if action in ("toggle", "switch"):
+            visible = bar.toggle()
+            write_out(f"Status bar is now {'shown' if visible else 'hidden'}.", "success")
+        elif action in ("on", "show"):
+            bar.remove_class("hidden")
+            write_out("Status bar shown.", "success")
+        elif action in ("off", "hide"):
+            bar.add_class("hidden")
+            write_out("Status bar hidden.", "warning")
+        else:
+            write_out("Usage: /status bar [toggle|on|off]", "error")
+        return
+
+    # Full diagnostic status report
+    write_out("[bold cyan]═══ MCP Client Status ═══[/]")
+
+    # 1. Connection
+    conn = getattr(app, "connection", None)
+    if conn and conn.connected:
+        target = f"{conn._last_host}:{conn._last_port}" if conn._last_port else conn._last_host
+        write_out(f"  [bold green]● Connection:[/] Connected to [white]{target}[/]")
+    elif conn and conn._reconnect_task and not conn._reconnect_task.done():
+        write_out("  [bold yellow]● Connection:[/] Reconnecting in background...")
+    else:
+        write_out("  [bold red]● Connection:[/] Disconnected")
+
+    # 2. Logging
+    logger = getattr(app, "logger", None)
+    if logger and logger.enabled:
+        write_out(f"  [cyan]● Logger:[/] Enabled (level: {logger.level}, dir: {logger.log_dir})")
+    else:
+        write_out("  [dim]● Logger:[/] Disabled")
+
+    # 3. Notifications
+    notify = getattr(app, "notifications", None)
+    if notify and notify.enabled:
+        kws = notify.list_keywords()
+        sound_str = " (sound ON)" if notify.sound else " (sound OFF)"
+        write_out(f"  [magenta]● Notifications:[/] Enabled{sound_str} | Watched: {len(kws)}")
+    else:
+        write_out("  [dim]● Notifications:[/] Disabled")
+
+    # 4. Macros
+    macros = getattr(app, "macros", None)
+    macro_count = len(macros.list_macros()) if macros else 0
+    write_out(f"  [green]● Macros:[/] {macro_count} registered")
+
+    # 5. Triggers & Tickers
+    scripts = getattr(app, "scripts", None)
+    if scripts:
+        trig_count = len(scripts.list_triggers())
+        tick_count = len(scripts.list_tickers())
+        write_out(f"  [yellow]● Automation:[/] {trig_count} triggers, {tick_count} active tickers")
+
+    # 6. Users / Occupants
+    try:
+        from ui.user_list import UserListSidebar
+        sidebar = app.query_one(UserListSidebar)
+        user_count = len(sidebar.get_users())
+    except Exception:
+        user_count = 0
+    write_out(f"  [blue]● User List:[/] {user_count} occupants active")
+    write_out("[bold cyan]═════════════════════════[/]")
+
+async def command_search(app: App, args: list[str]):
+    """Searches past scrollback messages (Usage: /search <query> or /find <query>)."""
+    renderer = getattr(app, "renderer", None)
+
+    def write_out(msg: str, style: str = "info") -> None:
+        if renderer:
+            if style == "success":
+                renderer.write_success(msg)
+            elif style == "warning":
+                renderer.write_warning(msg)
+            elif style == "error":
+                renderer.write_error(msg)
+            else:
+                renderer.write(msg)
+        else:
+            app.query_one("#chat_window").write(msg)
+
+    if not args:
+        write_out("Usage: /search <query> (or press Ctrl+F to open the search bar)", "error")
+        return
+
+    query = " ".join(args).strip()
+    if not renderer:
+        write_out("Renderer not available.", "error")
+        return
+
+    results = renderer.search_history(query)
+    if not results:
+        write_out(f"Search: No matches found for '{query}'.", "warning")
+    else:
+        write_out(f"[bold cyan]Search results for '[yellow]{query}[/]' ({len(results)} matches):[/]")
+        for entry in results:
+            time_str = entry.timestamp.strftime("%H:%M:%S")
+            escaped_text = entry.text.replace("[", "\\[")
+            write_out(f"  [dim]({time_str})[/dim] {escaped_text}")
+
+async def command_clear(app: App, args: list[str]):
+    """Clears the chat log window display (Usage: /clear)."""
+    renderer = getattr(app, "renderer", None)
+    if renderer:
+        renderer.clear_display()
+    else:
+        app.query_one("#chat_window").clear()
+
 # --- Command Registry ---
 
 COMMAND_REGISTRY = {
@@ -368,11 +601,17 @@ COMMAND_REGISTRY = {
     "help": command_help,
     "connect": command_connect,
     "disconnect": command_disconnect,
+    "reconnect": command_reconnect,
     "log": command_log,
     "macro": command_macro,
     "notify": command_notify,
     "trigger": command_trigger,
     "ticker": command_ticker,
+    "users": command_users,
+    "status": command_status,
+    "search": command_search,
+    "find": command_search,
+    "clear": command_clear,
 }
 
 # --- Main Processor ---
