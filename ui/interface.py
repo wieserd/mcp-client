@@ -9,6 +9,7 @@ from ui.output_renderer import OutputRenderer
 from ui.input_handler import HistoryInput
 from features.chat_logger import ChatLogger
 from features.macros import MacroManager
+from features.notifications import NotificationManager
 
 # This makes the path to the CSS file relative to this file.
 CSS_PATH = (Path(__file__).parent / "../assets/themes/default.css").resolve()
@@ -28,6 +29,7 @@ class MCPApp(App):
         initial_macros = getattr(config, "macros", None) or (config.get("macros", {}) if isinstance(config, dict) else {})
         self.macros = MacroManager(initial_macros if isinstance(initial_macros, dict) else {})
 
+        self.notifications = NotificationManager(app=self)
         self.renderer = OutputRenderer(self)
         self.parser = MCPParser(self)
         self.connection = Connection(self)
